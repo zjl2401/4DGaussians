@@ -1,3 +1,4 @@
+
 #
 # Copyright (C) 2023, Inria
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
@@ -24,6 +25,8 @@ from arguments import ModelParams, PipelineParams, get_combined_args, ModelHidde
 from gaussian_renderer import GaussianModel
 from time import time
 import threading
+import mmengine
+from mmengine.config import Config
 import concurrent.futures
 def multithread_write(image_list, path):
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=None)
@@ -107,7 +110,7 @@ if __name__ == "__main__":
     if args.configs:
         import mmcv
         from utils.params_utils import merge_hparams
-        config = mmcv.Config.fromfile(args.configs)
+        config = Config.fromfile(args.configs)
         args = merge_hparams(args, config)
     # Initialize system state (RNG)
     safe_state(args.quiet)
