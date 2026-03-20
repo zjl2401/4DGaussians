@@ -416,7 +416,8 @@ if __name__ == "__main__":
     if args.configs:
         import mmcv
         from utils.params_utils import merge_hparams
-        config = mmcv.Config.fromfile(args.configs)
+        from mmengine import Config
+        config = Config.fromfile(args.configs)
         args = merge_hparams(args, config)
     print("Optimizing " + args.model_path)
 
