@@ -1,3 +1,4 @@
+
 #
 # Copyright (C) 2023, Inria
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
@@ -24,6 +25,8 @@ from arguments import ModelParams, PipelineParams, get_combined_args, ModelHidde
 from gaussian_renderer import GaussianModel
 from time import time
 import threading
+import mmengine
+from mmengine.config import Config
 import concurrent.futures
 def multithread_write(image_list, path):
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=None)
@@ -102,13 +105,21 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--skip_video", action="store_true")
     parser.add_argument("--configs", type=str)
+    parser.add_argument(
+        "--no_eval",
+        action="store_true",
+        help="与训练时一致：COLMAP 场景全帧参与数据加载（若 cfg 中 eval 与训练不一致可显式指定）",
+    )
     args = get_combined_args(parser)
+    _no_eval = getattr(args, "no_eval", False)
     print("Rendering " , args.model_path)
     if args.configs:
         import mmcv
         from utils.params_utils import merge_hparams
-        config = mmcv.Config.fromfile(args.configs)
+        config = Config.fromfile(args.configs)
         args = merge_hparams(args, config)
+    if _no_eval:
+        args.eval = False
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
