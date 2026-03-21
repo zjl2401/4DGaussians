@@ -410,14 +410,23 @@ if __name__ == "__main__":
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--expname", type=str, default = "")
     parser.add_argument("--configs", type=str, default = "")
-    
+    parser.add_argument(
+        "--no_eval",
+        action="store_true",
+        help="COLMAP/单目视频：全部帧用于训练，不做 llffhold 测试划分（自定义环绕视频建议开启）",
+    )
+
     args = parser.parse_args(sys.argv[1:])
+    _no_eval = args.no_eval
     args.save_iterations.append(args.iterations)
     if args.configs:
         import mmcv
         from utils.params_utils import merge_hparams
-        config = mmcv.Config.fromfile(args.configs)
+        from mmengine import Config
+        config = Config.fromfile(args.configs)
         args = merge_hparams(args, config)
+    if _no_eval:
+        args.eval = False
     print("Optimizing " + args.model_path)
 
     # Initialize system state (RNG)
