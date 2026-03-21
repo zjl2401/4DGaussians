@@ -64,6 +64,45 @@ The dataset provided in [HyperNeRF](https://github.com/google/hypernerf) is used
 
 Meanwhile, [Plenoptic Dataset](https://github.com/facebookresearch/Neural_3D_Video) could be downloaded from their official websites. To save the memory, you should extract the frames of each video and then organize your dataset as follows.
 
+### Custom monocular orbit video (your own 180° video, slow-moving object)
+
+This repo can train on **one** moving camera and COLMAP poses (same pipeline as static COLMAP, with per-frame time stamps for dynamics).
+
+1. **Extract frames** (requires `ffmpeg` in PATH):
+
+```bash
+python scripts/prepare_orbit_video.py --video your_orbit.mp4 --out data/my_scene --fps 3 --overwrite
+```
+
+2. **Run COLMAP** from the project root (install COLMAP first; on Windows you may use WSL or a native COLMAP build):
+
+```bash
+python convert.py -s data/my_scene
+```
+
+3. **Train** (use all frames for training; optional smooth video path for export):
+
+```bash
+python train.py -s data/my_scene -m output/my_scene_run --no_eval --colmap_video_interp 160
+```
+
+4. **Render** the result video (`video_rgb.mp4` under the output folder):
+
+```bash
+python render.py -s data/my_scene -m output/my_scene_run --skip_train --skip_test
+```
+
+Tips: stable lighting, enough overlap between frames, and **slow** object motion help COLMAP and 4DGS. Use `--colmap_video_interp 0` if you want the export path to match training keyframes exactly.
+
+### 中文：用自有环绕视频生成结果
+
+1. 安装 **ffmpeg**，执行：`python scripts/prepare_orbit_video.py -v 你的视频.mp4 -o data/场景名 --fps 3 --overwrite`  
+2. 安装 **COLMAP** 后：`python convert.py -s data/场景名`  
+3. 训练：`python train.py -s data/场景名 -m output/实验名 --no_eval --colmap_video_interp 160`  
+4. 导出视频：`python render.py -s data/场景名 -m output/实验名 --skip_train --skip_test`  
+
+输出视频路径一般为：`output/实验名/video/ours_<迭代>/video_rgb.mp4`。
+
 ```
 ├── data
 │   | dnerf 
