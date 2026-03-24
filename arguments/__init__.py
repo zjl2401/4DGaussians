@@ -58,6 +58,8 @@ class ModelParams(ParamGroup):
         self.add_points=False
         self.extension=".png"
         self.llffhold=8
+        # COLMAP：导出 video_rgb.mp4 时在轨迹上插值这么多视角（0=与训练相机一致，不插值）
+        self.colmap_video_interp = 0
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):

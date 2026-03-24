@@ -76,6 +76,106 @@ def getNerfppNorm(cam_info):
     # breakpoint()
     return {"translate": translate, "radius": radius}
 
+def _rotmat_to_quat_xyzw(R):
+    R = np.asarray(R, dtype=np.float64)
+    tr = np.trace(R)
+    if tr > 0:
+        s = np.sqrt(tr + 1.0) * 2
+        w = 0.25 * s
+        x = (R[2, 1] - R[1, 2]) / s
+        y = (R[0, 2] - R[2, 0]) / s
+        z = (R[1, 0] - R[0, 1]) / s
+    elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+        s = 2.0 * np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2])
+        w = (R[2, 1] - R[1, 2]) / s
+        x = 0.25 * s
+        y = (R[0, 1] + R[1, 0]) / s
+        z = (R[0, 2] + R[2, 0]) / s
+    else:
+        s = 2.0 * np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1])
+        w = (R[1, 0] - R[0, 1]) / s
+        x = (R[0, 2] + R[2, 0]) / s
+        y = (R[1, 2] + R[2, 1]) / s
+        z = 0.25 * s
+    q = np.array([x, y, z, w], dtype=np.float64)
+    return q / (np.linalg.norm(q) + 1e-12)
+
+
+def _quat_xyzw_to_rotmat(q):
+    x, y, z, w = [float(v) for v in q]
+    xx, yy, zz = x * x, y * y, z * z
+    xy, xz, yz = x * y, x * z, y * z
+    wx, wy, wz = w * x, w * y, w * z
+    return np.array(
+        [
+            [1 - 2 * (yy + zz), 2 * (xy - wz), 2 * (xz + wy)],
+            [2 * (xy + wz), 1 - 2 * (xx + zz), 2 * (yz - wx)],
+            [2 * (xz - wy), 2 * (yz + wx), 1 - 2 * (xx + yy)],
+        ],
+        dtype=np.float64,
+    )
+
+
+def _quat_slerp_xyzw(q0, q1, t):
+    q0 = np.asarray(q0, dtype=np.float64)
+    q1 = np.asarray(q1, dtype=np.float64)
+    q0 = q0 / (np.linalg.norm(q0) + 1e-12)
+    q1 = q1 / (np.linalg.norm(q1) + 1e-12)
+    dot = float(np.sum(q0 * q1))
+    if dot < 0:
+        q1 = -q1
+        dot = -dot
+    if dot > 0.9995:
+        out = q0 + t * (q1 - q0)
+        return out / (np.linalg.norm(out) + 1e-12)
+    theta_0 = np.arccos(np.clip(dot, -1.0, 1.0))
+    sin_t0 = np.sin(theta_0)
+    theta = theta_0 * t
+    s0 = np.cos(theta) - dot * np.sin(theta) / (sin_t0 + 1e-12)
+    s1 = np.sin(theta) / (sin_t0 + 1e-12)
+    out = s0 * q0 + s1 * q1
+    return out / (np.linalg.norm(out) + 1e-12)
+
+
+def interpolate_colmap_video_cameras(cam_infos, num_samples):
+    """沿已排序的 COLMAP 相机轨迹球面线性插值位姿，用于更顺滑的导出视频。"""
+    if num_samples <= 0 or len(cam_infos) < 2:
+        return cam_infos
+    n = len(cam_infos)
+    out = []
+    us = np.linspace(0, n - 1, num_samples)
+    for uid, u in enumerate(us):
+        i0 = int(np.floor(u))
+        i1 = min(i0 + 1, n - 1)
+        alpha = float(u - i0) if i1 > i0 else 0.0
+        c0, c1 = cam_infos[i0], cam_infos[i1]
+        q0 = _rotmat_to_quat_xyzw(c0.R)
+        q1 = _rotmat_to_quat_xyzw(c1.R)
+        q = _quat_slerp_xyzw(q0, q1, alpha)
+        R = _quat_xyzw_to_rotmat(q)
+        T = (1.0 - alpha) * np.asarray(c0.T, dtype=np.float64) + alpha * np.asarray(c1.T, dtype=np.float64)
+        ir = int(np.round(np.clip(u, 0, n - 1)))
+        cref = cam_infos[ir]
+        tnorm = float(u / max(n - 1, 1))
+        out.append(
+            CameraInfo(
+                uid=uid,
+                R=R,
+                T=T,
+                FovY=cref.FovY,
+                FovX=cref.FovX,
+                image=cref.image,
+                image_path=None,
+                image_name=f"video_{uid:05d}",
+                width=cref.width,
+                height=cref.height,
+                time=tnorm,
+                mask=None,
+            )
+        )
+    return out
+
+
 def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     cam_infos = []
     for idx, key in enumerate(cam_extrinsics):
@@ -114,9 +214,10 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
         image_name = os.path.basename(image_path).split(".")[0]
         image = Image.open(image_path)
         image = PILtoTorch(image,None)
+        denom = max(len(cam_extrinsics) - 1, 1)
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                               image_path=image_path, image_name=image_name, width=width, height=height,
-                              time = float(idx/len(cam_extrinsics)), mask=None) # default by monocular settings.
+                              time=float(idx / denom), mask=None)  # 单目/视频：时间归一化到 [0,1]
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
     return cam_infos
@@ -147,7 +248,7 @@ def storePly(path, xyz, rgb):
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
 
-def readColmapSceneInfo(path, images, eval, llffhold=8):
+def readColmapSceneInfo(path, images, eval, llffhold=8, video_interp_frames=0):
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -172,6 +273,10 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
+    video_cam_infos = train_cam_infos
+    if video_interp_frames > 0:
+        video_cam_infos = interpolate_colmap_video_cameras(train_cam_infos, video_interp_frames)
+
     ply_path = os.path.join(path, "sparse/0/points3D.ply")
     bin_path = os.path.join(path, "sparse/0/points3D.bin")
     txt_path = os.path.join(path, "sparse/0/points3D.txt")
@@ -192,7 +297,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,
-                           video_cameras=train_cam_infos,
+                           video_cameras=video_cam_infos,
                            maxtime=0,
                            nerf_normalization=nerf_normalization,
                            ply_path=ply_path)
@@ -284,7 +389,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
             norm_data = im_data / 255.0
             arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
-            image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+            image = Image.fromarray(np.array(arr*255.0, dtype=np.uint8), "RGB")
             image = PILtoTorch(image,(800,800))
             fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
             FovY = fovy 
