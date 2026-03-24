@@ -129,7 +129,6 @@ if [[ "$MODE" == "fixed_camera" ]]; then
     --size "$SIZE"
 
   echo "[STEP 2/3] Train 4DGaussians (D-NeRF style)..."
-  python train.py \
     -s "$DATASET_DIR" \
     --expname "$EXP_NAME" \
     --configs arguments/dnerf/monocular_spin_demo.py \
@@ -159,7 +158,6 @@ elif [[ "$MODE" == "moving_camera" ]]; then
   python convert.py -s "$DATASET_DIR"
 
   echo "[STEP 3/4] Train 4DGaussians (COLMAP trajectory + time)..."
-  python train.py \
     -s "$DATASET_DIR" \
     -m "output/$EXP_NAME" \
     --no_eval \
