@@ -100,12 +100,8 @@ Tips: stable lighting, enough overlap between frames, and **slow** object motion
 For Ubuntu/WSL users, this repo now provides a unified runner:
 
 ```bash
-cd ~/4DGaussians
 bash scripts/run_monocular_video_demo.sh --video /mnt/c/Users/<you>/Desktop/your_video.mp4 --mode moving_camera
 ```
-
-If you are not in the repo root, use an absolute script path such as:
-`bash ~/4DGaussians/scripts/run_monocular_video_demo.sh --help`
 
 - `--mode fixed_camera`: static camera + moving object (no COLMAP required)
 - `--mode moving_camera`: moving camera (uses `prepare_orbit_video.py` + `convert.py`, requires `ffmpeg` and `colmap`)

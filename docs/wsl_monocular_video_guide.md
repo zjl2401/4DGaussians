@@ -23,23 +23,6 @@ which ffmpeg || echo "ffmpeg not found"
 
 脚本：`scripts/run_monocular_video_demo.sh`
 
-### 先进入仓库目录（非常关键）
-
-如果你在 `~` 目录直接执行 `bash scripts/run_monocular_video_demo.sh`，会报：
-`No such file or directory`。  
-因为这个相对路径只在仓库根目录下有效。
-
-```bash
-cd ~/4DGaussians
-# 如果你把仓库放在别处，请改成你自己的实际路径
-```
-
-也可以不 `cd`，直接用脚本绝对路径：
-
-```bash
-bash ~/4DGaussians/scripts/run_monocular_video_demo.sh --help
-```
-
 ### A. 相机不动 + 物体动
 
 ```bash
@@ -84,9 +67,6 @@ bash scripts/run_monocular_video_demo.sh \
 
 ## 4) 常见问题
 
-1. **`bash: scripts/run_monocular_video_demo.sh: No such file or directory`**  
-   你当前不在仓库根目录。先执行 `cd ~/4DGaussians`，再运行脚本；或使用绝对路径执行脚本。  
-
-2. **COLMAP 失败/点云很差**：降低 `--fps`、选择更清晰片段、确保纹理丰富和足够视差。  
-3. **WSL 找不到 Windows 文件**：Windows `C:\...` 在 WSL 中对应 `/mnt/c/...`。  
-4. **渲染没视频**：先确认训练是否完成，再检查 `output/<exp>/.../video_rgb.mp4` 路径。
+1. **COLMAP 失败/点云很差**：降低 `--fps`、选择更清晰片段、确保纹理丰富和足够视差。  
+2. **WSL 找不到 Windows 文件**：Windows `C:\...` 在 WSL 中对应 `/mnt/c/...`。  
+3. **渲染没视频**：先确认训练是否完成，再检查 `output/<exp>/.../video_rgb.mp4` 路径。
