@@ -31,10 +31,6 @@ Options:
 
   --train-port PORT             Train viewer port (default: 6017)
   --skip-render                 Train only
-  --zoom-scale F                Post-render center zoom factor, >1 enables zoom (default: 1.0)
-  --highlight-foreground        Generate motion-highlight video to separate object/background
-  --desktop-dir PATH            Export final videos to PATH (default: ~/Desktop)
-  --no-export-desktop           Do not copy post-render videos to desktop
   --help                        Show this message
 
 Examples:
@@ -58,10 +54,6 @@ RUN_NAME=""
 DATASET_ROOT="data/monocular_custom"
 EXP_ROOT="monocular_custom"
 TRAIN_PORT=6017
-ZOOM_SCALE=1.0
-HIGHLIGHT_FOREGROUND=0
-DESKTOP_DIR="${HOME}/Desktop"
-EXPORT_DESKTOP=1
 
 MAX_FRAMES=120
 STRIDE=2
@@ -92,10 +84,6 @@ while [[ $# -gt 0 ]]; do
     --colmap-video-interp) COLMAP_VIDEO_INTERP="$2"; shift 2 ;;
     --train-port) TRAIN_PORT="$2"; shift 2 ;;
     --skip-render) SKIP_RENDER=1; shift ;;
-    --zoom-scale) ZOOM_SCALE="$2"; shift 2 ;;
-    --highlight-foreground) HIGHLIGHT_FOREGROUND=1; shift ;;
-    --desktop-dir) DESKTOP_DIR="$2"; shift 2 ;;
-    --no-export-desktop) EXPORT_DESKTOP=0; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "[ERROR] Unknown option: $1" >&2; usage; exit 1 ;;
   esac
@@ -131,47 +119,6 @@ echo "[INFO] Experiment: $EXP_NAME"
 
 require_cmd python
 
-post_process_video() {
-  local src_video="$1"
-  local out_prefix="$2"
-  local mode="$3"
-  local current="$src_video"
-
-  if [[ "$ZOOM_SCALE" != "1.0" ]]; then
-    require_cmd ffmpeg
-    local zoom_video="${out_prefix}_zoom.mp4"
-    ffmpeg -y -i "$current" \
-      -vf "crop=iw/${ZOOM_SCALE}:ih/${ZOOM_SCALE}:(iw-iw/${ZOOM_SCALE})/2:(ih-ih/${ZOOM_SCALE})/2,scale=iw:ih" \
-      -an "$zoom_video" >/dev/null 2>&1
-    echo "[POST] Zoom video: $zoom_video"
-    current="$zoom_video"
-  fi
-
-  if [[ "$HIGHLIGHT_FOREGROUND" -eq 1 ]]; then
-    require_cmd ffmpeg
-    local motion_video="${out_prefix}_motion.mp4"
-    ffmpeg -y -i "$src_video" \
-      -vf "tblend=all_mode=difference,eq=contrast=2.0:brightness=0.03:saturation=1.8" \
-      -an "$motion_video" >/dev/null 2>&1
-    echo "[POST] Motion-highlight video: $motion_video"
-
-    local compare_video="${out_prefix}_compare.mp4"
-    ffmpeg -y -i "$current" -i "$motion_video" \
-      -filter_complex "[0:v][1:v]hstack=inputs=2[v]" -map "[v]" -an "$compare_video" >/dev/null 2>&1
-    echo "[POST] Side-by-side video: $compare_video"
-    current="$compare_video"
-    if [[ "$mode" != "fixed_camera" ]]; then
-      echo "[WARN] Foreground highlight is motion-based; best quality is in fixed_camera scenes."
-    fi
-  fi
-
-  if [[ "$EXPORT_DESKTOP" -eq 1 ]]; then
-    mkdir -p "$DESKTOP_DIR"
-    cp -f "$current" "$DESKTOP_DIR/"
-    echo "[POST] Exported to desktop: $DESKTOP_DIR/$(basename "$current")"
-  fi
-}
-
 if [[ "$MODE" == "fixed_camera" ]]; then
   echo "[STEP 1/3] Prepare fixed-camera monocular dataset..."
   python scripts/prepare_monocular_spin_demo.py \
@@ -182,7 +129,6 @@ if [[ "$MODE" == "fixed_camera" ]]; then
     --size "$SIZE"
 
   echo "[STEP 2/3] Train 4DGaussians (D-NeRF style)..."
-  python train.py \
     -s "$DATASET_DIR" \
     --expname "$EXP_NAME" \
     --configs arguments/dnerf/monocular_spin_demo.py \
@@ -212,7 +158,6 @@ elif [[ "$MODE" == "moving_camera" ]]; then
   python convert.py -s "$DATASET_DIR"
 
   echo "[STEP 3/4] Train 4DGaussians (COLMAP trajectory + time)..."
-  python train.py \
     -s "$DATASET_DIR" \
     -m "output/$EXP_NAME" \
     --no_eval \
@@ -236,13 +181,7 @@ fi
 echo
 echo "[DONE] Finished."
 if [[ "$MODE" == "fixed_camera" ]]; then
-  RESULT_VIDEO="$(ls -1t output/$EXP_NAME/test/ours_*/video_rgb.mp4 2>/dev/null | head -n 1 || true)"
   echo "[RESULT] output/$EXP_NAME/test/ours_*/video_rgb.mp4"
 else
-  RESULT_VIDEO="$(ls -1t output/$EXP_NAME/video/ours_*/video_rgb.mp4 2>/dev/null | head -n 1 || true)"
   echo "[RESULT] output/$EXP_NAME/video/ours_*/video_rgb.mp4"
-fi
-
-if [[ "$SKIP_RENDER" -eq 0 ]] && [[ -n "${RESULT_VIDEO:-}" ]] && [[ -f "$RESULT_VIDEO" ]]; then
-  post_process_video "$RESULT_VIDEO" "${RESULT_VIDEO%.mp4}" "$MODE"
 fi
