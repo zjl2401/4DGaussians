@@ -46,13 +46,16 @@ bash ~/4DGaussians/scripts/run_monocular_video_demo.sh --help
 bash scripts/run_monocular_video_demo.sh \
   --mode fixed_camera \
   --video "/mnt/c/Users/未命名/Desktop/5ea426d43844789334bbc72c667b1cc9.mp4" \
-  --run-name my_fixed_case
+  --run-name my_fixed_case \
+  --zoom-scale 1.25 \
+  --highlight-foreground
 ```
 
 输出：
 
 - 训练输出：`output/monocular_custom/my_fixed_case`
 - 渲染视频：`output/monocular_custom/my_fixed_case/test/ours_*/video_rgb.mp4`
+- 拉近+前景高亮对比视频（自动导出到桌面）：`~/Desktop/*_compare.mp4`
 
 ### B. 相机动（物体可静止或缓慢动）
 
@@ -74,6 +77,8 @@ bash scripts/run_monocular_video_demo.sh \
 - `fixed_camera`：`--max-frames 120 --stride 2 --size 800`（默认值）
 - `moving_camera`：`--fps 2~5`（默认 3），视频越长可把 `fps` 调低以减轻 COLMAP 负担。
 - 若显存不够，可先降低输入分辨率（采集时或预处理阶段）。
+- 可视化增强：`--zoom-scale 1.15~1.35`（中心拉近）+ `--highlight-foreground`（运动区域高亮，便于区分背景和主体）。
+- 默认会把后处理视频复制到 `~/Desktop`，可用 `--desktop-dir <路径>` 改目录，或 `--no-export-desktop` 关闭。
 
 ## 3) 拍摄建议（很重要）
 
