@@ -231,7 +231,7 @@ class GaussianModel:
         return xyz
 
     def load_model(self, path):
-        print("loading model from exists{}".format(path))
+        print("loading model from exists {}".format(path))
         weight_dict = torch.load(os.path.join(path,"deformation.pth"),map_location="cuda")
         self._deformation.load_state_dict(weight_dict)
         self._deformation = self._deformation.to("cuda")
@@ -486,12 +486,12 @@ class GaussianModel:
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_deformation_table)
         return selected_xyz, new_xyz
 
-    def prune(self, max_grad, min_opacity, extent, max_screen_size):
+    def prune(self, max_grad, min_opacity, extent, max_screen_size, world_scale_extent_ratio=0.1):
         prune_mask = (self.get_opacity < min_opacity).squeeze()
 
         if max_screen_size:
             big_points_vs = self.max_radii2D > max_screen_size
-            big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
+            big_points_ws = self.get_scaling.max(dim=1).values > float(world_scale_extent_ratio) * extent
             prune_mask = torch.logical_or(prune_mask, big_points_vs)
 
             prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
