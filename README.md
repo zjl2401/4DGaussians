@@ -117,6 +117,14 @@ Detailed guide (Chinese): `docs/wsl_monocular_video_guide.md`.
 
 输出视频路径一般为：`output/实验名/video/ours_<迭代>/video_rgb.mp4`。
 
+如果你发现导出视频“对着空气转”或环绕方向不对，可加下面参数（可单独或组合）：
+
+- `--colmap_video_mode orbit`：强制导出环绕轨道。
+- `--colmap_video_orbit_pcd_center_mode robust`：用去离群点后的点云中心做 look-at（默认已是 `robust`）。
+- `--colmap_video_orbit_lookat_blend 1.0`：完全跟随点云中心（不是相机均值）。
+- `--colmap_video_orbit_reverse`：反转环绕方向（顺/逆时针切换）。
+- `--colmap_video_orbit_azimuth_offset_deg 180`：整体旋转起始方位（例如转半圈）。
+
 ```
 ├── data
 │   | dnerf 

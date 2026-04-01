@@ -110,7 +110,7 @@ class ModelParams(ParamGroup):
         # 关闭则不用首帧相机 Y 投影（少数场景反而错时可设 True）
         self.colmap_video_orbit_disable_ref_up_projection = False
         # 环绕 look-at 用的点云中心：mean=质心；aabb=包围盒中心；mid=二者平均（转盘物体常更居中）
-        self.colmap_video_orbit_pcd_center_mode = "mean"
+        self.colmap_video_orbit_pcd_center_mode = "robust"
         # True：按上式从点云算 delta，把所有相机与稀疏点云平移 P'=P-delta，使中心落原点附近（需训练/渲染同开，旧 checkpoint 不适用）
         self.colmap_recenter_from_pcd = False
         super().__init__(parser, "Loading Parameters", sentinel)
