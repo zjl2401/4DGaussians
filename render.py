@@ -46,7 +46,7 @@ def multithread_write(image_list, path):
             write_image(image_list[index], index, path)
     
 to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
-def render_set(model_path, name, iteration, views, gaussians, pipeline, background, cam_type):
+def render_set(model_path, name, iteration, views, gaussians, pipeline, background, cam_type, video_fps=30):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
 
@@ -56,6 +56,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     gt_list = []
     render_list = []
     print("point nums:",gaussians._xyz.shape[0])
+    if views is None or len(views) == 0:
+        print(f"[WARN] No views to render for split='{name}'. Skipping.")
+        return
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
         
@@ -70,14 +73,23 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             gt_list.append(gt)
 
     time2=time()
-    print("FPS:",(len(views)-1)/(time2-time1))
+    if len(views) > 1:
+        print("FPS:",(len(views)-1)/(time2-time1))
+    else:
+        print("FPS: n/a (<=1 frame)")
 
     multithread_write(gt_list, gts_path)
 
     multithread_write(render_list, render_path)
 
     
-    imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_rgb.mp4'), render_images, fps=30)
+    imageio.mimwrite(
+        os.path.join(model_path, name, "ours_{}".format(iteration), "video_rgb.mp4"),
+        render_images,
+        fps=int(video_fps) if video_fps else 30,
+    )
+
+
 def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, skip_video: bool):
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree, hyperparam)
@@ -85,14 +97,45 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
         cam_type=scene.dataset_type
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+        video_fps = int(getattr(dataset, "colmap_video_fps", 30) or 30)
 
         if not skip_train:
-            render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,cam_type)
+            render_set(
+                dataset.model_path,
+                "train",
+                scene.loaded_iter,
+                scene.getTrainCameras(),
+                gaussians,
+                pipeline,
+                background,
+                cam_type,
+                video_fps=video_fps,
+            )
 
         if not skip_test:
-            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,cam_type)
+            render_set(
+                dataset.model_path,
+                "test",
+                scene.loaded_iter,
+                scene.getTestCameras(),
+                gaussians,
+                pipeline,
+                background,
+                cam_type,
+                video_fps=video_fps,
+            )
         if not skip_video:
-            render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,background,cam_type)
+            render_set(
+                dataset.model_path,
+                "video",
+                scene.loaded_iter,
+                scene.getVideoCameras(),
+                gaussians,
+                pipeline,
+                background,
+                cam_type,
+                video_fps=video_fps,
+            )
 if __name__ == "__main__":
     # Set up command line argument parser
     parser = ArgumentParser(description="Testing script parameters")
