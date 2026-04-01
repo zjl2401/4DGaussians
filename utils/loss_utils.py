@@ -20,6 +20,22 @@ def lpips_loss(img1, img2, lpips_model):
 def l1_loss(network_output, gt):
     return torch.abs((network_output - gt)).mean()
 
+def masked_l1_loss(network_output, gt, mask, eps: float = 1e-6):
+    """
+    mask: shape [B,1,H,W] or [B,H,W] in [0,1]. Computes L1 only on foreground.
+    """
+    if mask is None:
+        return l1_loss(network_output, gt)
+    if mask.dim() == 3:
+        mask = mask.unsqueeze(1)
+    mask = mask.to(dtype=network_output.dtype, device=network_output.device)
+    if mask.shape[1] != 1:
+        mask = mask[:, :1, :, :]
+    diff = torch.abs(network_output - gt)
+    diff = diff * mask
+    denom = mask.sum().clamp_min(eps)
+    return diff.sum() / denom
+
 def l2_loss(network_output, gt):
     return ((network_output - gt) ** 2).mean()
 
