@@ -73,7 +73,9 @@ if errorlevel 1 (
 
 echo [STEP 3/3] Render fixed-camera test sequence...
 python render.py ^
+  --source_path "%DATASET_DIR%" ^
   --model_path "output/%EXP_NAME%" ^
+  --iteration %ITERATIONS% ^
   --skip_train ^
   --skip_video ^
   --configs "%CONFIG_PATH%"
