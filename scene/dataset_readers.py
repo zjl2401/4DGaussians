@@ -318,6 +318,20 @@ def orbit_colmap_video_cameras(
     base_radius = float(np.median(dists)) if len(dists) > 0 else 1.0
     radius = max(base_radius * float(radius_scale), 1e-3)
 
+    # 让环绕的 0° 与首个训练相机方位对齐，避免“从空气开始转”。
+    ref_vec = cam_centers[0] - center
+    ref_vec = ref_vec - np.dot(ref_vec, world_up) * world_up
+    nref = np.linalg.norm(ref_vec)
+    if nref > 1e-6:
+        v0 = ref_vec / nref
+        v1 = np.cross(world_up, v0)
+        nv1 = np.linalg.norm(v1)
+        if nv1 > 1e-6:
+            v1 = v1 / nv1
+        else:
+            v1 = np.cross(world_up, np.array([1.0, 0.0, 0.0], dtype=np.float64))
+            v1 = v1 / (np.linalg.norm(v1) + 1e-12)
+
     n = int(num_samples)
     theta_degs = np.linspace(
         float(azimuth_min), float(azimuth_max), n, endpoint=False
@@ -532,7 +546,14 @@ def storePly(path, xyz, rgb):
 
 
 def compute_colmap_pcd_center(points_xyz, mode="mean"):
-    """稀疏点云几何中心：mean=质心；aabb=轴对齐包围盒中心；mid=二者平均（转盘场景常更稳）。"""
+    """稀疏点云几何中心。
+
+    mode:
+      - mean: 质心
+      - aabb: 轴对齐包围盒中心
+      - mid: mean 与 aabb 的平均（转盘场景常更稳）
+      - robust: 先做分位数去极值，再取均值（稀疏点云有离群点时更稳）
+    """
     pts = np.asarray(points_xyz, dtype=np.float64)
     if pts.size == 0:
         return np.zeros(3, dtype=np.float64)
@@ -543,6 +564,16 @@ def compute_colmap_pcd_center(points_xyz, mode="mean"):
     if m in ("mid", "mean_aabb", "blend"):
         aabb_c = (np.min(pts, axis=0) + np.max(pts, axis=0)) * 0.5
         return 0.5 * (mean_c + aabb_c)
+    if m in ("robust", "trimmed", "p10p90"):
+        if pts.shape[0] < 32:
+            return mean_c
+        q10 = np.percentile(pts, 10.0, axis=0)
+        q90 = np.percentile(pts, 90.0, axis=0)
+        keep = np.logical_and(pts >= q10[None, :], pts <= q90[None, :]).all(axis=1)
+        kept = pts[keep]
+        if kept.shape[0] < max(16, int(0.05 * pts.shape[0])):
+            return mean_c
+        return np.mean(kept, axis=0)
     return mean_c
 
 
@@ -589,7 +620,7 @@ def readColmapSceneInfo(
     video_orbit_azimuth_offset_deg=0.0,
     video_orbit_reverse=False,
     video_orbit_disable_ref_up_projection=False,
-    video_orbit_pcd_center_mode="mean",
+    video_orbit_pcd_center_mode="robust",
     colmap_recenter_from_pcd=False,
 ):
     try:
