@@ -13,7 +13,7 @@ import random
 import os, sys
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss
+from utils.loss_utils import l1_loss, masked_l1_loss, ssim, l2_loss, lpips_loss
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
@@ -42,6 +42,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                          checkpoint_iterations, checkpoint, debug_from,
                          gaussians, scene, stage, tb_writer, train_iter,timer):
     first_iter = 0
+    lpips_model = None
 
     gaussians.training_setup(opt)
     if checkpoint:
@@ -196,9 +197,19 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
         image_tensor = torch.cat(images,0)
         gt_image_tensor = torch.cat(gt_images,0)
+        # Optional foreground mask (turntable/static background).
+        masks = []
+        for viewpoint_cam in viewpoint_cams:
+            m = getattr(viewpoint_cam, "mask", None)
+            if m is None:
+                masks = []
+                break
+            # m is [1,H,W] on CPU in dataset; ensure cuda + batch dim
+            masks.append(m.to("cuda").unsqueeze(0))
+        mask_tensor = torch.cat(masks, 0) if len(masks) > 0 else None
         # Loss
         # breakpoint()
-        Ll1 = l1_loss(image_tensor, gt_image_tensor[:,:3,:,:])
+        Ll1 = masked_l1_loss(image_tensor, gt_image_tensor[:,:3,:,:], mask_tensor)
 
         psnr_ = psnr(image_tensor, gt_image_tensor).mean().double()
         # norm
@@ -209,12 +220,19 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             # tv_loss = 0
             tv_loss = gaussians.compute_regulation(hyper.time_smoothness_weight, hyper.l1_time_planes, hyper.plane_tv_weight)
             loss += tv_loss
+        if stage == "fine" and getattr(opt, "lambda_rigid_deform", 0.0) > 0:
+            loss = loss + float(opt.lambda_rigid_deform) * gaussians.standard_constaint()
         if opt.lambda_dssim != 0:
             ssim_loss = ssim(image_tensor,gt_image_tensor)
             loss += opt.lambda_dssim * (1.0-ssim_loss)
-        # if opt.lambda_lpips !=0:
-        #     lpipsloss = lpips_loss(image_tensor,gt_image_tensor,lpips_model)
-        #     loss += opt.lambda_lpips * lpipsloss
+        if stage == "fine" and opt.lambda_lpips != 0:
+            if lpips_model is None:
+                lpips_model = lpips.LPIPS(net="vgg").cuda()
+            # LPIPS 期望 [-1, 1]
+            lp_in = image_tensor * 2.0 - 1.0
+            lp_gt = gt_image_tensor[:, :3, :, :] * 2.0 - 1.0
+            lpipsloss = lpips_loss(lp_in, lp_gt, lpips_model)
+            loss = loss + opt.lambda_lpips * lpipsloss
         
         loss.backward()
         if torch.isnan(loss).any():
@@ -249,8 +267,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     or (iteration < 3000 and iteration % 50 == 49) \
                         or (iteration < 60000 and iteration %  100 == 99) :
                     # breakpoint()
-                        render_training_image(scene, gaussians, [test_cams[iteration%len(test_cams)]], render, pipe, background, stage+"test", iteration,timer.get_elapsed_time(),scene.dataset_type)
-                        render_training_image(scene, gaussians, [train_cams[iteration%len(train_cams)]], render, pipe, background, stage+"train", iteration,timer.get_elapsed_time(),scene.dataset_type)
+                    if test_cams is not None and len(test_cams) > 0:
+                        render_training_image(scene, gaussians, [test_cams[iteration % len(test_cams)]], render, pipe, background, stage+"test", iteration,timer.get_elapsed_time(),scene.dataset_type)
+                    if train_cams is not None and len(train_cams) > 0:
+                        render_training_image(scene, gaussians, [train_cams[iteration % len(train_cams)]], render, pipe, background, stage+"train", iteration,timer.get_elapsed_time(),scene.dataset_type)
                         # render_training_image(scene, gaussians, train_cams, render, pipe, background, stage+"train", iteration,timer.get_elapsed_time(),scene.dataset_type)
 
                     # total_images.append(to8b(temp_image).transpose(1,2,0))
@@ -261,23 +281,39 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
                 gaussians.add_densification_stats(viewspace_point_tensor_grad, visibility_filter)
 
+                dens_iv = opt.densification_interval
+                early_u = int(getattr(opt, "early_prune_until_iter", 0) or 0)
+                dens_early = int(getattr(opt, "densification_interval_early", 0) or 0)
+                if dens_early > 0 and early_u > 0 and iteration < early_u:
+                    dens_iv = dens_early
+
                 if stage == "coarse":
                     opacity_threshold = opt.opacity_threshold_coarse
                     densify_threshold = opt.densify_grad_threshold_coarse
                 else:    
                     opacity_threshold = opt.opacity_threshold_fine_init - iteration*(opt.opacity_threshold_fine_init - opt.opacity_threshold_fine_after)/(opt.densify_until_iter)  
                     densify_threshold = opt.densify_grad_threshold_fine_init - iteration*(opt.densify_grad_threshold_fine_init - opt.densify_grad_threshold_after)/(opt.densify_until_iter )  
-                if  iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0 and gaussians.get_xyz.shape[0]<360000:
+                boost = float(getattr(opt, "early_prune_opacity_boost", 1.0) or 1.0)
+                if early_u > 0 and iteration < early_u and boost > 0.0:
+                    opacity_threshold = opacity_threshold * boost
+
+                ws_ratio = float(getattr(opt, "prune_world_scale_extent_ratio", 0.1) or 0.1)
+
+                if  iteration > opt.densify_from_iter and iteration % dens_iv == 0 and gaussians.get_xyz.shape[0]<360000:
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
                     
                     gaussians.densify(densify_threshold, opacity_threshold, scene.cameras_extent, size_threshold, 5, 5, scene.model_path, iteration, stage)
-                if  iteration > opt.pruning_from_iter and iteration % opt.pruning_interval == 0 and gaussians.get_xyz.shape[0]>200000:
+                run_extra_prune = iteration > opt.pruning_from_iter and iteration % opt.pruning_interval == 0
+                min_g = int(getattr(opt, "prune_extra_min_gaussians", 0))
+                if min_g > 0:
+                    run_extra_prune = run_extra_prune and gaussians.get_xyz.shape[0] > min_g
+                if run_extra_prune:
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
 
-                    gaussians.prune(densify_threshold, opacity_threshold, scene.cameras_extent, size_threshold)
+                    gaussians.prune(densify_threshold, opacity_threshold, scene.cameras_extent, size_threshold, ws_ratio)
                     
                 # if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0 :
-                if iteration % opt.densification_interval == 0 and gaussians.get_xyz.shape[0]<360000 and opt.add_point:
+                if iteration % dens_iv == 0 and gaussians.get_xyz.shape[0]<360000 and opt.add_point:
                     gaussians.grow(5,5,scene.model_path,iteration,stage)
                     # torch.cuda.empty_cache()
                 if iteration % opt.opacity_reset_interval == 0:
@@ -342,9 +378,26 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
     # Report test and samples of training set
     if iteration in testing_iterations:
         torch.cuda.empty_cache()
-        # 
-        validation_configs = ({'name': 'test', 'cameras' : [scene.getTestCameras()[idx % len(scene.getTestCameras())] for idx in range(10, 5000, 299)]},
-                              {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(10, 5000, 299)]})
+        test_cams = scene.getTestCameras()
+        train_cams = scene.getTrainCameras()
+
+        validation_configs = []
+        # When --no_eval is enabled, some dataset types can provide an empty test set.
+        # Avoid idx % len(test_cams) division by zero.
+        if test_cams is not None and len(test_cams) > 0:
+            validation_configs.append(
+                {
+                    "name": "test",
+                    "cameras": [test_cams[idx % len(test_cams)] for idx in range(10, 5000, 299)],
+                }
+            )
+        if train_cams is not None and len(train_cams) > 0:
+            validation_configs.append(
+                {
+                    "name": "train",
+                    "cameras": [train_cams[idx % len(train_cams)] for idx in range(10, 5000, 299)],
+                }
+            )
 
         for config in validation_configs:
             if config['cameras'] and len(config['cameras']) > 0:
@@ -376,11 +429,33 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                     tb_writer.add_scalar(stage+"/"+config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
 
         if tb_writer:
-            tb_writer.add_histogram(f"{stage}/scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
-            
-            tb_writer.add_scalar(f'{stage}/total_points', scene.gaussians.get_xyz.shape[0], iteration)
-            tb_writer.add_scalar(f'{stage}/deformation_rate', scene.gaussians._deformation_table.sum()/scene.gaussians.get_xyz.shape[0], iteration)
-            tb_writer.add_histogram(f"{stage}/scene/motion_histogram", scene.gaussians._deformation_accum.mean(dim=-1)/100, iteration,max_bins=500)
+            # Some environments may have numpy/tensorboard ABI incompatibilities.
+            # Histogram logging shouldn't be allowed to crash training.
+            try:
+                tb_writer.add_histogram(
+                    f"{stage}/scene/opacity_histogram",
+                    scene.gaussians.get_opacity,
+                    iteration,
+                )
+                tb_writer.add_histogram(
+                    f"{stage}/scene/motion_histogram",
+                    scene.gaussians._deformation_accum.mean(dim=-1) / 100,
+                    iteration,
+                    max_bins=500,
+                )
+            except Exception as e:
+                print(f"[WARN] tensorboard add_histogram failed: {e}")
+
+            tb_writer.add_scalar(
+                f"{stage}/total_points",
+                scene.gaussians.get_xyz.shape[0],
+                iteration,
+            )
+            tb_writer.add_scalar(
+                f"{stage}/deformation_rate",
+                scene.gaussians._deformation_table.sum() / scene.gaussians.get_xyz.shape[0],
+                iteration,
+            )
         
         torch.cuda.empty_cache()
 def setup_seed(seed):
