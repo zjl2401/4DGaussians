@@ -156,7 +156,10 @@ def interpolate_colmap_video_cameras(cam_infos, num_samples):
         T = (1.0 - alpha) * np.asarray(c0.T, dtype=np.float64) + alpha * np.asarray(c1.T, dtype=np.float64)
         ir = int(np.round(np.clip(u, 0, n - 1)))
         cref = cam_infos[ir]
-        tnorm = float(u / max(n - 1, 1))
+        t0 = float(getattr(c0, "time", 0.0))
+        t1 = float(getattr(c1, "time", 0.0))
+        tnorm = float((1.0 - alpha) * t0 + alpha * t1)
+        tnorm = float(np.clip(tnorm, 0.0, 1.0))
         out.append(
             CameraInfo(
                 uid=uid,
@@ -169,6 +172,266 @@ def interpolate_colmap_video_cameras(cam_infos, num_samples):
                 image_name=f"video_{uid:05d}",
                 width=cref.width,
                 height=cref.height,
+                time=tnorm,
+                mask=None,
+            )
+        )
+    return out
+
+
+def _c2w_to_colmap_rt(c2w):
+    """与 generateCamerasFromTransforms 一致：c2w -> (R, T)。"""
+    matrix = np.linalg.inv(np.asarray(c2w, dtype=np.float64))
+    R = -np.transpose(matrix[:3, :3])
+    R[:, 0] = -R[:, 0]
+    T = -matrix[:3, 3]
+    return R, T
+
+
+def _pose_spherical_c2w(theta_deg, phi_deg, radius):
+    """与 generateCamerasFromTransforms 中 pose_spherical 一致（numpy），返回 4x4 c2w。"""
+    t = np.deg2rad(float(theta_deg))
+    p = np.deg2rad(float(phi_deg))
+    trans_t = np.array(
+        [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, float(radius)], [0, 0, 0, 1]],
+        dtype=np.float64,
+    )
+    rot_phi = np.array(
+        [
+            [1, 0, 0, 0],
+            [0, np.cos(p), -np.sin(p), 0],
+            [0, np.sin(p), np.cos(p), 0],
+            [0, 0, 0, 1],
+        ],
+        dtype=np.float64,
+    )
+    rot_theta = np.array(
+        [
+            [np.cos(t), 0, -np.sin(t), 0],
+            [0, 1, 0, 0],
+            [np.sin(t), 0, np.cos(t), 0],
+            [0, 0, 0, 1],
+        ],
+        dtype=np.float64,
+    )
+    b2c = np.array(
+        [[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
+        dtype=np.float64,
+    )
+    return b2c @ rot_theta @ rot_phi @ trans_t
+
+
+def orbit_colmap_video_cameras(
+    cam_infos,
+    num_samples,
+    phi_deg=-20.0,
+    radius_scale=1.0,
+    azimuth_min=-180.0,
+    azimuth_max=180.0,
+    time_mode="sweep",
+    fixed_time=0.5,
+    time_start=0.0,
+    time_end=1.0,
+    lookat_point=None,
+    lookat_blend=1.0,
+    lookat_nudge_frac=0.0,
+    flip_y=False,
+    roll_deg=0.0,
+    no_align_ref_up=False,
+    lookat_ox=0.0,
+    lookat_oy=0.0,
+    lookat_oz=0.0,
+    pan_v0_frac=0.0,
+    pan_v1_frac=0.0,
+    azimuth_offset_deg=0.0,
+    reverse=False,
+    orbit_style="horizontal",
+    disable_ref_up_projection=False,
+):
+    """环绕视频相机。
+
+    orbit_style:
+      - horizontal（默认）：在平均相机「上方向」与水平基 (v0,v1) 构成的锥面上采样，始终 look-at center，
+        并可选将 up 与首帧相机 Y 对齐（no_align_ref_up / disable_ref_up_projection），适合 COLMAP 实拍。
+      - spherical：pose_spherical（NeRF/Blender 约定）+ 平移 center；与合成数据一致，实拍易出现横倒/朝向怪。
+    center 由训练相机均值 / lookat_point、nudge、pan、lookat_o* 得到；半径为相机到 center 的中位数 × radius_scale。
+    """
+    if len(cam_infos) == 0:
+        return cam_infos
+    if num_samples <= 0:
+        num_samples = len(cam_infos)
+
+    c2w_list = []
+    cam_centers = []
+    for cam in cam_infos:
+        w2c = getWorld2View2(cam.R, cam.T)
+        c2w = np.linalg.inv(w2c)
+        c2w_list.append(c2w)
+        cam_centers.append(c2w[:3, 3])
+    cam_centers = np.asarray(cam_centers, dtype=np.float64)
+    cam_mean = np.mean(cam_centers, axis=0)
+
+    if lookat_point is not None:
+        lp = np.asarray(lookat_point, dtype=np.float64).reshape(3)
+        b = float(np.clip(lookat_blend, 0.0, 1.0))
+        center = b * lp + (1.0 - b) * cam_mean
+    else:
+        center = cam_mean.copy()
+
+    to_cams = cam_mean - center
+    nt = np.linalg.norm(to_cams)
+    if float(lookat_nudge_frac) != 0.0 and nt > 1e-6:
+        dists0 = np.linalg.norm(cam_centers - center[None, :], axis=1)
+        r0 = float(np.median(dists0)) if len(dists0) > 0 else 1.0
+        center = center + float(lookat_nudge_frac) * r0 * (to_cams / nt)
+
+    ups = np.stack([c[:3, 1] for c in c2w_list], axis=0)
+    world_up = np.mean(ups, axis=0)
+    nu = np.linalg.norm(world_up)
+    if nu < 1e-6:
+        world_up = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+    else:
+        world_up = world_up / nu
+
+    aux = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+    v0 = np.cross(world_up, aux)
+    if np.linalg.norm(v0) < 1e-6:
+        aux = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+        v0 = np.cross(world_up, aux)
+    v0 = v0 / (np.linalg.norm(v0) + 1e-12)
+    v1 = np.cross(world_up, v0)
+    v1 = v1 / (np.linalg.norm(v1) + 1e-12)
+
+    dists_pre = np.linalg.norm(cam_centers - center[None, :], axis=1)
+    r_pre = float(np.median(dists_pre)) if len(dists_pre) > 0 else 1.0
+    center = (
+        center
+        + float(pan_v0_frac) * r_pre * v0
+        + float(pan_v1_frac) * r_pre * v1
+        + np.array(
+            [float(lookat_ox), float(lookat_oy), float(lookat_oz)],
+            dtype=np.float64,
+        )
+    )
+
+    dists = np.linalg.norm(cam_centers - center[None, :], axis=1)
+    base_radius = float(np.median(dists)) if len(dists) > 0 else 1.0
+    radius = max(base_radius * float(radius_scale), 1e-3)
+
+    n = int(num_samples)
+    theta_degs = np.linspace(
+        float(azimuth_min), float(azimuth_max), n, endpoint=False
+    ) + float(azimuth_offset_deg)
+    if bool(reverse):
+        theta_degs = np.flip(theta_degs)
+
+    tm = str(time_mode).lower().strip()
+    ft = float(np.clip(fixed_time, 0.0, 1.0))
+    ts = float(np.clip(time_start, 0.0, 1.0))
+    te = float(np.clip(time_end, 0.0, 1.0))
+    if te < ts:
+        ts, te = te, ts
+    denom = max(n - 1, 1)
+    rd = np.deg2rad(float(roll_deg))
+    ref_cam = cam_infos[0]
+    style = str(orbit_style).lower().strip()
+    phi_rad = np.deg2rad(float(phi_deg))
+    # horizontal：几何 up 与 COLMAP/渲染里图像 Y 常相反，默认等价于 flip_y；与 CLI flip_y 异或可再翻回
+    is_spherical = style == "spherical"
+    effective_flip_y = bool(flip_y) ^ (not is_spherical)
+
+    out = []
+    for uid, theta_deg in enumerate(theta_degs):
+        if style == "spherical":
+            c2w = _pose_spherical_c2w(float(theta_deg), float(phi_deg), radius)
+            c2w = np.asarray(c2w, dtype=np.float64).copy()
+            c2w[:3, 3] = c2w[:3, 3] + center
+
+            if abs(rd) > 1e-8:
+                cr, sr = np.cos(rd), np.sin(rd)
+                r0, r1 = c2w[:3, 0].copy(), c2w[:3, 1].copy()
+                c2w[:3, 0] = cr * r0 - sr * r1
+                c2w[:3, 1] = sr * r0 + cr * r1
+            if effective_flip_y:
+                c2w[:3, 1] = -c2w[:3, 1]
+
+            R, T = _c2w_to_colmap_rt(c2w)
+        else:
+            theta = np.deg2rad(float(theta_deg))
+            offset = radius * (
+                np.cos(phi_rad) * (np.cos(theta) * v0 + np.sin(theta) * v1)
+                + np.sin(phi_rad) * world_up
+            )
+            eye = center + offset
+            back = eye - center
+            back = back / (np.linalg.norm(back) + 1e-12)
+            right = np.cross(world_up, back)
+            nr = np.linalg.norm(right)
+            if nr < 1e-6:
+                right = np.cross(np.array([1.0, 0.0, 0.0], dtype=np.float64), back)
+                nr = np.linalg.norm(right)
+            right = right / (nr + 1e-12)
+            up = np.cross(back, right)
+            up = up / (np.linalg.norm(up) + 1e-12)
+
+            if not bool(no_align_ref_up):
+                ref_up = c2w_list[0][:3, 1]
+                if not bool(disable_ref_up_projection):
+                    up_proj = ref_up - np.dot(ref_up, back) * back
+                    nup = np.linalg.norm(up_proj)
+                    if nup > 1e-6:
+                        up_proj = up_proj / nup
+                        if np.dot(up_proj, up) < 0.0:
+                            up_proj = -up_proj
+                        up = up_proj
+                        right = np.cross(up, back)
+                        right = right / (np.linalg.norm(right) + 1e-12)
+                        up = np.cross(back, right)
+                        up = up / (np.linalg.norm(up) + 1e-12)
+                elif np.dot(up, ref_up) < 0.0:
+                    up = -up
+                    right = np.cross(up, back)
+                    right = right / (np.linalg.norm(right) + 1e-12)
+                    up = np.cross(back, right)
+                    up = up / (np.linalg.norm(up) + 1e-12)
+            if effective_flip_y:
+                up = -up
+                right = np.cross(up, back)
+                right = right / (np.linalg.norm(right) + 1e-12)
+                up = np.cross(back, right)
+                up = up / (np.linalg.norm(up) + 1e-12)
+            if abs(rd) > 1e-8:
+                cr, sr = np.cos(rd), np.sin(rd)
+                rn = cr * right - sr * up
+                un = sr * right + cr * up
+                right = rn / (np.linalg.norm(rn) + 1e-12)
+                up = un / (np.linalg.norm(un) + 1e-12)
+
+            c2w = np.eye(4, dtype=np.float64)
+            c2w[:3, 0] = right
+            c2w[:3, 1] = up
+            c2w[:3, 2] = back
+            c2w[:3, 3] = eye
+
+            R, T = _c2w_to_colmap_rt(c2w)
+        if tm == "fixed":
+            tnorm = ft
+        else:
+            tnorm = float(ts + (te - ts) * (uid / denom))
+            tnorm = float(np.clip(tnorm, 0.0, 1.0))
+
+        out.append(
+            CameraInfo(
+                uid=uid,
+                R=R,
+                T=T,
+                FovY=ref_cam.FovY,
+                FovX=ref_cam.FovX,
+                image=ref_cam.image,
+                image_path=None,
+                image_name=f"orbit_{uid:05d}",
+                width=ref_cam.width,
+                height=ref_cam.height,
                 time=tnorm,
                 mask=None,
             )
@@ -215,9 +478,28 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
         image = Image.open(image_path)
         image = PILtoTorch(image,None)
         denom = max(len(cam_extrinsics) - 1, 1)
+        # Optional foreground mask: dataset/masks/<stem>.png (same layout as Blender transforms)
+        mask = None
+        mask_dir = os.path.join(os.path.dirname(images_folder), "masks")
+        if os.path.isdir(mask_dir):
+            stem = Path(os.path.basename(extr.name)).stem
+            img_suffix = Path(os.path.basename(extr.name)).suffix.lower() or ".png"
+            for suf in (".png", ".jpg", ".jpeg", img_suffix):
+                cand = os.path.join(mask_dir, stem + suf)
+                if os.path.isfile(cand):
+                    m = Image.open(cand).convert("L")
+                    m = PILtoTorch(m, None).to(torch.float32)[0:1, :, :] / 255.0
+                    if m.shape[-2:] != image.shape[-2:]:
+                        m = torch.nn.functional.interpolate(
+                            m.unsqueeze(0),
+                            size=(image.shape[-2], image.shape[-1]),
+                            mode="nearest",
+                        ).squeeze(0)
+                    mask = m
+                    break
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                               image_path=image_path, image_name=image_name, width=width, height=height,
-                              time=float(idx / denom), mask=None)  # 单目/视频：时间归一化到 [0,1]
+                              time=float(idx / denom), mask=mask)  # 单目/视频：时间归一化到 [0,1]
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
     return cam_infos
@@ -248,7 +530,68 @@ def storePly(path, xyz, rgb):
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
 
-def readColmapSceneInfo(path, images, eval, llffhold=8, video_interp_frames=0):
+
+def compute_colmap_pcd_center(points_xyz, mode="mean"):
+    """稀疏点云几何中心：mean=质心；aabb=轴对齐包围盒中心；mid=二者平均（转盘场景常更稳）。"""
+    pts = np.asarray(points_xyz, dtype=np.float64)
+    if pts.size == 0:
+        return np.zeros(3, dtype=np.float64)
+    m = str(mode).lower().strip()
+    mean_c = np.mean(pts, axis=0)
+    if m == "aabb":
+        return (np.min(pts, axis=0) + np.max(pts, axis=0)) * 0.5
+    if m in ("mid", "mean_aabb", "blend"):
+        aabb_c = (np.min(pts, axis=0) + np.max(pts, axis=0)) * 0.5
+        return 0.5 * (mean_c + aabb_c)
+    return mean_c
+
+
+def shift_colmap_cameras_world_minus_delta(cam_infos, delta):
+    """世界坐标平移 P' = P - delta。COLMAP 下 t' = R^T @ delta + t（与 readColmapCameras / getWorld2View2 一致）。"""
+    delta = np.asarray(delta, dtype=np.float64).reshape(3)
+    out = []
+    for c in cam_infos:
+        R = np.asarray(c.R, dtype=np.float64)
+        T = np.asarray(c.T, dtype=np.float64).reshape(3)
+        T_new = R.T @ delta + T
+        out.append(c._replace(T=T_new))
+    return out
+
+
+def readColmapSceneInfo(
+    path,
+    images,
+    eval,
+    llffhold=8,
+    video_interp_frames=0,
+    video_mode="follow",
+    video_orbit_frames=160,
+    video_orbit_style="horizontal",
+    video_orbit_phi=-20.0,
+    video_orbit_radius_scale=1.0,
+    video_orbit_time_mode="sweep",
+    video_orbit_fixed_time=0.5,
+    video_orbit_azimuth_min=-180.0,
+    video_orbit_azimuth_max=180.0,
+    video_orbit_use_pcd_center=True,
+    video_orbit_lookat_blend=1.0,
+    video_orbit_lookat_nudge_frac=0.0,
+    video_orbit_time_start=0.0,
+    video_orbit_time_end=1.0,
+    video_orbit_flip_y=False,
+    video_orbit_roll_deg=0.0,
+    video_orbit_no_align_ref_up=False,
+    video_orbit_lookat_ox=0.0,
+    video_orbit_lookat_oy=0.0,
+    video_orbit_lookat_oz=0.0,
+    video_orbit_pan_v0_frac=0.0,
+    video_orbit_pan_v1_frac=0.0,
+    video_orbit_azimuth_offset_deg=0.0,
+    video_orbit_reverse=False,
+    video_orbit_disable_ref_up_projection=False,
+    video_orbit_pcd_center_mode="mean",
+    colmap_recenter_from_pcd=False,
+):
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -271,12 +614,6 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, video_interp_frames=0):
         train_cam_infos = cam_infos
         test_cam_infos = []
 
-    nerf_normalization = getNerfppNorm(train_cam_infos)
-
-    video_cam_infos = train_cam_infos
-    if video_interp_frames > 0:
-        video_cam_infos = interpolate_colmap_video_cameras(train_cam_infos, video_interp_frames)
-
     ply_path = os.path.join(path, "sparse/0/points3D.ply")
     bin_path = os.path.join(path, "sparse/0/points3D.bin")
     txt_path = os.path.join(path, "sparse/0/points3D.txt")
@@ -287,13 +624,97 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, video_interp_frames=0):
         except:
             xyz, rgb, _ = read_points3D_text(txt_path)
         storePly(ply_path, xyz, rgb)
-    
+
     try:
         pcd = fetchPly(ply_path)
-        
-    except:
+    except Exception:
         pcd = None
-    
+
+    center_mode = str(video_orbit_pcd_center_mode).lower().strip()
+    if bool(colmap_recenter_from_pcd) and pcd is not None:
+        pts0 = np.asarray(pcd.points, dtype=np.float64)
+        delta = compute_colmap_pcd_center(pts0, center_mode)
+        train_cam_infos = shift_colmap_cameras_world_minus_delta(train_cam_infos, delta)
+        test_cam_infos = shift_colmap_cameras_world_minus_delta(test_cam_infos, delta)
+        pts1 = pts0 - delta.reshape(1, 3)
+        pcd = BasicPointCloud(
+            points=pts1, colors=pcd.colors, normals=pcd.normals
+        )
+        print(
+            f"[COLMAP] recentered scene from pcd (mode={center_mode}): "
+            f"delta={np.array2string(delta, precision=4, separator=', ')}, |delta|={float(np.linalg.norm(delta)):.4f}"
+        )
+
+    nerf_normalization = getNerfppNorm(train_cam_infos)
+
+    mode = str(video_mode).lower().strip()
+    video_cam_infos = train_cam_infos
+    pc_center_for_orbit = None
+    if pcd is not None and bool(video_orbit_use_pcd_center):
+        pc_center_for_orbit = compute_colmap_pcd_center(
+            np.asarray(pcd.points), center_mode
+        )
+
+    if mode == "orbit":
+        video_cam_infos = orbit_colmap_video_cameras(
+            train_cam_infos,
+            num_samples=int(video_orbit_frames),
+            orbit_style=str(video_orbit_style),
+            phi_deg=float(video_orbit_phi),
+            radius_scale=float(video_orbit_radius_scale),
+            azimuth_min=float(video_orbit_azimuth_min),
+            azimuth_max=float(video_orbit_azimuth_max),
+            time_mode=str(video_orbit_time_mode),
+            fixed_time=float(video_orbit_fixed_time),
+            time_start=float(video_orbit_time_start),
+            time_end=float(video_orbit_time_end),
+            lookat_point=pc_center_for_orbit,
+            lookat_blend=float(video_orbit_lookat_blend),
+            lookat_nudge_frac=float(video_orbit_lookat_nudge_frac),
+            flip_y=bool(video_orbit_flip_y),
+            roll_deg=float(video_orbit_roll_deg),
+            no_align_ref_up=bool(video_orbit_no_align_ref_up),
+            lookat_ox=float(video_orbit_lookat_ox),
+            lookat_oy=float(video_orbit_lookat_oy),
+            lookat_oz=float(video_orbit_lookat_oz),
+            pan_v0_frac=float(video_orbit_pan_v0_frac),
+            pan_v1_frac=float(video_orbit_pan_v1_frac),
+            azimuth_offset_deg=float(video_orbit_azimuth_offset_deg),
+            reverse=bool(video_orbit_reverse),
+            disable_ref_up_projection=bool(video_orbit_disable_ref_up_projection),
+        )
+        print(
+            f"[COLMAP video] mode=orbit, style={str(video_orbit_style)}, frames={len(video_cam_infos)}, "
+            f"phi={float(video_orbit_phi):.1f}, radius_scale={float(video_orbit_radius_scale):.3f}, "
+            f"time={str(video_orbit_time_mode)}"
+            + (
+                f" (fixed_t={float(video_orbit_fixed_time):.3f})"
+                if str(video_orbit_time_mode).lower().strip() == "fixed"
+                else f" (t={float(video_orbit_time_start):.3f}->{float(video_orbit_time_end):.3f})"
+            )
+            + f", azimuth=[{float(video_orbit_azimuth_min):.1f},{float(video_orbit_azimuth_max):.1f}]"
+            + (
+                f", lookat=pcd({center_mode})"
+                if pc_center_for_orbit is not None
+                else ", lookat=cams"
+            )
+            + (", reverse_azimuth" if bool(video_orbit_reverse) else "")
+        )
+        if int(video_interp_frames) > 0 and len(video_cam_infos) >= 2:
+            n0 = len(video_cam_infos)
+            video_cam_infos = interpolate_colmap_video_cameras(
+                video_cam_infos, int(video_interp_frames)
+            )
+            print(
+                f"[COLMAP video] orbit+slerp upsample: {n0} -> {len(video_cam_infos)} frames "
+                f"(colmap_video_interp={int(video_interp_frames)})"
+            )
+    elif video_interp_frames > 0:
+        video_cam_infos = interpolate_colmap_video_cameras(train_cam_infos, video_interp_frames)
+        print(f"[COLMAP video] mode=follow+interp, frames={len(video_cam_infos)}")
+    else:
+        print(f"[COLMAP video] mode=follow, frames={len(video_cam_infos)}")
+
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,
@@ -328,15 +749,21 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         return c2w
     cam_infos = []
     # generate render poses and times
-    render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,160+1)[:-1]], 0)
-    render_times = torch.linspace(0,maxtime,render_poses.shape[0])
     with open(os.path.join(path, template_transformsfile)) as json_file:
         template_json = json.load(json_file)
         try:
             fovx = template_json["camera_angle_x"]
         except:
             fovx = focal2fov(template_json["fl_x"], template_json['w'])
-    print("hello!!!!")
+    video_phi = float(template_json.get("video_camera_phi", -30.0))
+    video_radius = float(template_json.get("video_camera_radius", 4.0))
+
+    # generate render poses and times
+    render_poses = torch.stack(
+        [pose_spherical(angle, video_phi, video_radius) for angle in np.linspace(-180, 180, 160 + 1)[:-1]],
+        0,
+    )
+    render_times = torch.linspace(0, maxtime, render_poses.shape[0])
     # breakpoint()
     # load a single image to get image info.
     for idx, frame in enumerate(template_json["frames"]):
@@ -345,7 +772,9 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         image_name = Path(cam_name).stem
         image = Image.open(image_path)
         im_data = np.array(image.convert("RGBA"))
-        image = PILtoTorch(image,(800,800))
+        # Keep the extracted resolution (auto-crop may produce non-800 sizes).
+        # Forced resize to 800x800 can blur fine details and harm training.
+        image = PILtoTorch(image, None)
         break
     # format information
     for idx, (time, poses) in enumerate(zip(render_times,render_poses)):
@@ -390,14 +819,29 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             norm_data = im_data / 255.0
             arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
             image = Image.fromarray(np.array(arr*255.0, dtype=np.uint8), "RGB")
-            image = PILtoTorch(image,(800,800))
+            # Keep extracted resolution; avoid fixed 800x800 blur.
+            image = PILtoTorch(image, None)
             fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
             FovY = fovy 
             FovX = fovx
 
+            mask = None
+            mask_path = os.path.join(path, "masks", Path(frame["file_path"]).name + extension)
+            if os.path.exists(mask_path):
+                m = Image.open(mask_path).convert("L")
+                m = PILtoTorch(m, None).to(torch.float32)[0:1, :, :] / 255.0
+                # ensure same H/W as image tensor
+                if m.shape[-2:] != image.shape[-2:]:
+                    m = torch.nn.functional.interpolate(
+                        m.unsqueeze(0),
+                        size=(image.shape[-2], image.shape[-1]),
+                        mode="nearest",
+                    ).squeeze(0)
+                mask = m
+
             cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                             image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
-                            time = time, mask=None))
+                            time = time, mask=mask))
             
     return cam_infos
 def read_timeline(path):
