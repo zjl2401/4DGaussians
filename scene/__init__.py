@@ -43,8 +43,73 @@ class Scene:
         self.test_cameras = {}
         self.video_cameras = {}
         if os.path.exists(os.path.join(args.source_path, "sparse")):
+            # Backward compatibility: some scripts may use old arg sets
+            # that don't include recently added COLMAP video path options.
+            colmap_video_interp = getattr(args, "colmap_video_interp", 0)
+            colmap_video_mode = getattr(args, "colmap_video_mode", "follow")
+            colmap_video_orbit_frames = getattr(args, "colmap_video_orbit_frames", 160)
+            colmap_video_orbit_style = getattr(args, "colmap_video_orbit_style", "horizontal")
+            colmap_video_orbit_phi = getattr(args, "colmap_video_orbit_phi", -20.0)
+            colmap_video_orbit_radius_scale = getattr(args, "colmap_video_orbit_radius_scale", 1.0)
+            colmap_video_orbit_time_mode = getattr(args, "colmap_video_orbit_time_mode", "sweep")
+            colmap_video_orbit_fixed_time = getattr(args, "colmap_video_orbit_fixed_time", 0.5)
+            colmap_video_orbit_azimuth_min = getattr(args, "colmap_video_orbit_azimuth_min", -180.0)
+            colmap_video_orbit_azimuth_max = getattr(args, "colmap_video_orbit_azimuth_max", 180.0)
+            colmap_video_orbit_use_pcd_center = getattr(args, "colmap_video_orbit_use_pcd_center", True)
+            colmap_video_orbit_lookat_blend = getattr(args, "colmap_video_orbit_lookat_blend", 1.0)
+            colmap_video_orbit_lookat_nudge_frac = getattr(args, "colmap_video_orbit_lookat_nudge_frac", 0.0)
+            colmap_video_orbit_time_start = getattr(args, "colmap_video_orbit_time_start", 0.0)
+            colmap_video_orbit_time_end = getattr(args, "colmap_video_orbit_time_end", 1.0)
+            colmap_video_orbit_flip_y = getattr(args, "colmap_video_orbit_flip_y", False)
+            colmap_video_orbit_roll_deg = getattr(args, "colmap_video_orbit_roll_deg", 0.0)
+            colmap_video_orbit_no_align_ref_up = getattr(args, "colmap_video_orbit_no_align_ref_up", False)
+            colmap_video_orbit_lookat_ox = getattr(args, "colmap_video_orbit_lookat_ox", 0.0)
+            colmap_video_orbit_lookat_oy = getattr(args, "colmap_video_orbit_lookat_oy", 0.0)
+            colmap_video_orbit_lookat_oz = getattr(args, "colmap_video_orbit_lookat_oz", 0.0)
+            colmap_video_orbit_pan_v0_frac = getattr(args, "colmap_video_orbit_pan_v0_frac", 0.0)
+            colmap_video_orbit_pan_v1_frac = getattr(args, "colmap_video_orbit_pan_v1_frac", 0.0)
+            colmap_video_orbit_azimuth_offset_deg = getattr(args, "colmap_video_orbit_azimuth_offset_deg", 0.0)
+            colmap_video_orbit_reverse = getattr(args, "colmap_video_orbit_reverse", False)
+            colmap_video_orbit_disable_ref_up_projection = getattr(
+                args, "colmap_video_orbit_disable_ref_up_projection", False
+            )
+            colmap_video_orbit_pcd_center_mode = getattr(
+                args, "colmap_video_orbit_pcd_center_mode", "mean"
+            )
+            colmap_recenter_from_pcd = getattr(args, "colmap_recenter_from_pcd", False)
             scene_info = sceneLoadTypeCallbacks["Colmap"](
-                args.source_path, args.images, args.eval, args.llffhold, args.colmap_video_interp
+                args.source_path,
+                args.images,
+                args.eval,
+                args.llffhold,
+                colmap_video_interp,
+                colmap_video_mode,
+                colmap_video_orbit_frames,
+                str(colmap_video_orbit_style),
+                colmap_video_orbit_phi,
+                colmap_video_orbit_radius_scale,
+                colmap_video_orbit_time_mode,
+                colmap_video_orbit_fixed_time,
+                colmap_video_orbit_azimuth_min,
+                colmap_video_orbit_azimuth_max,
+                colmap_video_orbit_use_pcd_center,
+                colmap_video_orbit_lookat_blend,
+                colmap_video_orbit_lookat_nudge_frac,
+                colmap_video_orbit_time_start,
+                colmap_video_orbit_time_end,
+                colmap_video_orbit_flip_y,
+                colmap_video_orbit_roll_deg,
+                colmap_video_orbit_no_align_ref_up,
+                colmap_video_orbit_lookat_ox,
+                colmap_video_orbit_lookat_oy,
+                colmap_video_orbit_lookat_oz,
+                colmap_video_orbit_pan_v0_frac,
+                colmap_video_orbit_pan_v1_frac,
+                colmap_video_orbit_azimuth_offset_deg,
+                colmap_video_orbit_reverse,
+                colmap_video_orbit_disable_ref_up_projection,
+                str(colmap_video_orbit_pcd_center_mode),
+                bool(colmap_recenter_from_pcd),
             )
             dataset_type="colmap"
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
