@@ -113,7 +113,15 @@ Detailed guide (Chinese): `docs/wsl_monocular_video_guide.md`.
 1. 安装 **ffmpeg**，执行：`python scripts/prepare_orbit_video.py -v 你的视频.mp4 -o data/场景名 --fps 3 --overwrite`  
 2. 安装 **COLMAP** 后：`python convert.py -s data/场景名`  
 3. 训练：`python train.py -s data/场景名 -m output/实验名 --no_eval --colmap_video_interp 160`  
-4. 导出视频：`python render.py -s data/场景名 -m output/实验名 --skip_train --skip_test`  
+4. 导出视频（**真正模型环绕视角**，不跟随原视频抖动）示例：  
+   `python render.py -s data/场景名 -m output/实验名 --skip_train --skip_test --iteration <迭代> --colmap_video_mode orbit --colmap_video_orbit_frames 240 --colmap_video_orbit_time_mode fixed --colmap_video_orbit_fixed_time 0.5 --colmap_video_interp 0`  
+
+常见问题与实用参数：
+- 如果出现“镜头先对着空气转 / 起始方向不对”：  
+  - 可用 `--colmap_video_orbit_azimuth_offset_deg <度数>` 手动旋转起始方位；  
+  - 需要反向环绕时用 `--colmap_video_orbit_reverse`；  
+- 如果 orbit 的 look-at 被离群点带偏（画面总是偏到一边）：  
+  - 默认点云中心模式已改为更稳健的 `robust`（分位数去离群再求中心）；也可显式指定：`--colmap_video_orbit_pcd_center_mode robust`。
 
 输出视频路径一般为：`output/实验名/video/ours_<迭代>/video_rgb.mp4`。
 
