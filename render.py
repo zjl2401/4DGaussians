@@ -64,7 +64,13 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         
         rendering = render(view, gaussians, pipeline, background,cam_type=cam_type)["render"]
         render_images.append(to8b(rendering).transpose(1,2,0))
-        render_list.append(rendering)
+        if name == "video":
+            # 视频导出只需要 CPU 的 8-bit 帧，不保留 GPU 张量，避免长序列 OOM。
+            del rendering
+            if torch.cuda.is_available() and (idx + 1) % 16 == 0:
+                torch.cuda.empty_cache()
+        else:
+            render_list.append(rendering)
         if name in ["train", "test"]:
             if cam_type != "PanopticSports":
                 gt = view.original_image[0:3, :, :]
@@ -78,16 +84,17 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     else:
         print("FPS: n/a (<=1 frame)")
 
-    multithread_write(gt_list, gts_path)
+    if name in ("train", "test"):
+        multithread_write(gt_list, gts_path)
+        multithread_write(render_list, render_path)
 
-    multithread_write(render_list, render_path)
-
-    
+    print("Writing video_rgb.mp4 ...")
     imageio.mimwrite(
         os.path.join(model_path, name, "ours_{}".format(iteration), "video_rgb.mp4"),
         render_images,
         fps=int(video_fps) if video_fps else 30,
     )
+    print("Done writing video_rgb.mp4.")
 
 
 def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, skip_video: bool):
