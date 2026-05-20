@@ -12,7 +12,7 @@
 import os
 import random
 import json
-from utils.system_utils import searchForMaxIteration
+from utils.system_utils import searchFineMaxIteration
 from scene.dataset_readers import sceneLoadTypeCallbacks
 from scene.gaussian_model import GaussianModel
 from scene.dataset import FourDGSdataset
@@ -33,10 +33,28 @@ class Scene:
         self.gaussians = gaussians
         
         if load_iteration:
+            pc_root = os.path.join(self.model_path, "point_cloud")
             if load_iteration == -1:
-                self.loaded_iter = searchForMaxIteration(os.path.join(self.model_path, "point_cloud"))
+                self.loaded_iter = searchFineMaxIteration(pc_root)
             else:
-                self.loaded_iter = load_iteration
+                self.loaded_iter = int(load_iteration)
+                ply_wanted = os.path.join(
+                    pc_root, "iteration_%d" % (self.loaded_iter,), "point_cloud.ply"
+                )
+                if not os.path.isfile(ply_wanted):
+                    try:
+                        fb = searchFineMaxIteration(pc_root)
+                    except FileNotFoundError as e:
+                        raise FileNotFoundError(
+                            "未找到 %s；且目录下没有可用的 iteration_*/point_cloud.ply。"
+                            % (ply_wanted,)
+                        ) from e
+                    if fb != self.loaded_iter:
+                        print(
+                            "[WARN] 请求的 iteration_%d 不存在，改为加载最新的 fine 检查点 iteration_%d。"
+                            % (self.loaded_iter, fb)
+                        )
+                    self.loaded_iter = fb
             print("Loading trained model at iteration {}".format(self.loaded_iter))
 
         self.train_cameras = {}
@@ -74,7 +92,7 @@ class Scene:
                 args, "colmap_video_orbit_disable_ref_up_projection", False
             )
             colmap_video_orbit_pcd_center_mode = getattr(
-                args, "colmap_video_orbit_pcd_center_mode", "mean"
+                args, "colmap_video_orbit_pcd_center_mode", "robust"
             )
             colmap_recenter_from_pcd = getattr(args, "colmap_recenter_from_pcd", False)
             scene_info = sceneLoadTypeCallbacks["Colmap"](
