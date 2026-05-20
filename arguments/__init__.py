@@ -109,8 +109,10 @@ class ModelParams(ParamGroup):
         self.colmap_video_orbit_reverse = False
         # 关闭则不用首帧相机 Y 投影（少数场景反而错时可设 True）
         self.colmap_video_orbit_disable_ref_up_projection = False
-        # 环绕 look-at 用的点云中心：mean=质心；aabb=包围盒中心；mid=二者平均（转盘物体常更居中）
-        self.colmap_video_orbit_pcd_center_mode = "mean"
+        # 环绕 look-at 用的点云中心：
+        # - mean=质心；aabb=包围盒中心；mid=二者平均
+        # - robust=分位数去离群后再求中心（更不容易被离群点带偏，推荐默认）
+        self.colmap_video_orbit_pcd_center_mode = "robust"
         # True：按上式从点云算 delta，把所有相机与稀疏点云平移 P'=P-delta，使中心落原点附近（需训练/渲染同开，旧 checkpoint 不适用）
         self.colmap_recenter_from_pcd = False
         super().__init__(parser, "Loading Parameters", sentinel)
@@ -168,6 +170,10 @@ class OptimizationParams(ParamGroup):
         self.custom_sampler=None
         self.iterations = 30_000
         self.coarse_iterations = 3000
+        # COLMAP/图片数据默认用更轻量迭代数（仅在未手动覆盖 --iterations/--coarse_iterations 时生效）
+        self.auto_colmap_light_schedule = True
+        self.colmap_iterations = 12_000
+        self.colmap_coarse_iterations = 1200
         self.position_lr_init = 0.00016
         self.position_lr_final = 0.0000016
         self.position_lr_delay_mult = 0.01
