@@ -319,9 +319,31 @@ def orbit_colmap_video_cameras(
     radius = max(base_radius * float(radius_scale), 1e-3)
 
     n = int(num_samples)
-    theta_degs = np.linspace(
-        float(azimuth_min), float(azimuth_max), n, endpoint=False
-    ) + float(azimuth_offset_deg)
+    theta_degs = np.linspace(float(azimuth_min), float(azimuth_max), n, endpoint=False)
+
+    # 对齐 orbit 的“0° 方位”到首个训练相机方位，并尽量把序列起点滚动到最接近 0° 的位置，
+    # 以减少“先对着空气转”的情况（尤其是 full 360° 时）。
+    try:
+        ref_center = cam_centers[0]
+        ref_dir = ref_center - center
+        # 投影到 (v0,v1) 平面上求方位角
+        ref_dir = ref_dir - np.dot(ref_dir, world_up) * world_up
+        nr = np.linalg.norm(ref_dir)
+        if nr > 1e-6:
+            ref_dir = ref_dir / nr
+            ref_az = np.rad2deg(
+                np.arctan2(float(np.dot(ref_dir, v1)), float(np.dot(ref_dir, v0)))
+            )
+            # 让 ref cam 的方位成为 0°
+            theta_degs = theta_degs - float(ref_az)
+            # 若范围覆盖 0°，将起始帧滚动到最接近 0° 的角度
+            if float(azimuth_min) <= 0.0 <= float(azimuth_max) and len(theta_degs) > 0:
+                k = int(np.argmin(np.abs(theta_degs)))
+                theta_degs = np.roll(theta_degs, -k)
+    except Exception:
+        pass
+
+    theta_degs = theta_degs + float(azimuth_offset_deg)
     if bool(reverse):
         theta_degs = np.flip(theta_degs)
 
@@ -532,12 +554,32 @@ def storePly(path, xyz, rgb):
 
 
 def compute_colmap_pcd_center(points_xyz, mode="mean"):
-    """稀疏点云几何中心：mean=质心；aabb=轴对齐包围盒中心；mid=二者平均（转盘场景常更稳）。"""
+    """稀疏点云几何中心。
+
+    - mean: 质心
+    - aabb: 轴对齐包围盒中心
+    - mid: mean 与 aabb 的平均
+    - robust: 先按分位数去离群，再用 mid（更容易锁定真实目标，避免离群点带偏）
+    """
     pts = np.asarray(points_xyz, dtype=np.float64)
     if pts.size == 0:
         return np.zeros(3, dtype=np.float64)
     m = str(mode).lower().strip()
     mean_c = np.mean(pts, axis=0)
+    if m == "robust":
+        # 按每个轴做分位数裁剪去离群；太少则退化到 mean
+        try:
+            lo = np.quantile(pts, 0.05, axis=0)
+            hi = np.quantile(pts, 0.95, axis=0)
+            keep = np.all((pts >= lo[None, :]) & (pts <= hi[None, :]), axis=1)
+            pts_r = pts[keep]
+            if pts_r.shape[0] < 16:
+                pts_r = pts
+        except Exception:
+            pts_r = pts
+        mean_r = np.mean(pts_r, axis=0)
+        aabb_r = (np.min(pts_r, axis=0) + np.max(pts_r, axis=0)) * 0.5
+        return 0.5 * (mean_r + aabb_r)
     if m == "aabb":
         return (np.min(pts, axis=0) + np.max(pts, axis=0)) * 0.5
     if m in ("mid", "mean_aabb", "blend"):
@@ -589,7 +631,7 @@ def readColmapSceneInfo(
     video_orbit_azimuth_offset_deg=0.0,
     video_orbit_reverse=False,
     video_orbit_disable_ref_up_projection=False,
-    video_orbit_pcd_center_mode="mean",
+    video_orbit_pcd_center_mode="robust",
     colmap_recenter_from_pcd=False,
 ):
     try:
