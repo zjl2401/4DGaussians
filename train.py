@@ -337,13 +337,28 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     dataset.model_path = args.model_path
     timer = Timer()
     scene = Scene(dataset, gaussians, load_coarse=None)
+    coarse_iter = opt.coarse_iterations
+    fine_iter = opt.iterations
+    # 对 COLMAP/图片数据，默认使用更轻量训练日程，避免二阶段训练过重。
+    if getattr(scene, "dataset_type", "") == "colmap" and getattr(opt, "auto_colmap_light_schedule", False):
+        if opt.coarse_iterations == 3000:
+            coarse_iter = int(getattr(opt, "colmap_coarse_iterations", 1200))
+        if opt.iterations == 30_000:
+            fine_iter = int(getattr(opt, "colmap_iterations", 12_000))
+        if coarse_iter != opt.coarse_iterations or fine_iter != opt.iterations:
+            print(
+                f"[COLMAP] Light schedule enabled: coarse {opt.coarse_iterations}->{coarse_iter}, "
+                f"fine {opt.iterations}->{fine_iter}"
+            )
+    # 实际每阶段最后一轮必须能触发 scene.save；否则 fine 只跑到 fine_iter 而 save_iterations 仍是 30000 等时不会写出 point_cloud。
+    saving_iterations = sorted(set(saving_iterations) | {int(coarse_iter), int(fine_iter)})
     timer.start()
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                              checkpoint_iterations, checkpoint, debug_from,
-                             gaussians, scene, "coarse", tb_writer, opt.coarse_iterations,timer)
+                             gaussians, scene, "coarse", tb_writer, coarse_iter,timer)
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
-                         gaussians, scene, "fine", tb_writer, opt.iterations,timer)
+                         gaussians, scene, "fine", tb_writer, fine_iter,timer)
 
 def prepare_output_and_logger(expname):    
     if not args.model_path:
