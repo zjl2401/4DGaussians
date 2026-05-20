@@ -1,0 +1,200 @@
+[Thu Apr  9 18:48:25 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:27 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:33 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:44 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:45 2026] systemd-journald[39]: Under memory pressure, flushing caches.
+[Thu Apr  9 18:48:46 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:48 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:50 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:52 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:54 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:57 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:48:59 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:49:02 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:49:04 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:49:06 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:49:08 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:49:11 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:49:13 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:49:16 2026] misc dxg: dxgk: dxgkio_query_adapter_info: Ioctl failed: -22
+[Thu Apr  9 18:49:18 2026] cuda-EvtHandlr: page allocation failure: order:4, mode:0x40c40(GFP_NOFS|__GFP_COMP), nodemask=(null),cpuset=/,mems_allowed=0
+[Thu Apr  9 18:49:18 2026] CPU: 28 PID: 1982 Comm: cuda-EvtHandlr Not tainted 6.6.87.2-microsoft-standard-WSL2 #1
+[Thu Apr  9 18:49:18 2026] Call Trace:
+[Thu Apr  9 18:49:18 2026]  <TASK>
+[Thu Apr  9 18:49:18 2026]  dump_stack_lvl+0x4c/0x70
+[Thu Apr  9 18:49:18 2026]  dump_stack+0x14/0x20
+[Thu Apr  9 18:49:18 2026]  warn_alloc+0x10d/0x190
+[Thu Apr  9 18:49:18 2026]  ? __alloc_pages_direct_compact+0xa7/0x290
+[Thu Apr  9 18:49:18 2026]  __alloc_pages_slowpath.constprop.0+0xdb6/0xe80
+[Thu Apr  9 18:49:18 2026]  ? __enqueue_entity+0x102/0x130
+[Thu Apr  9 18:49:18 2026]  ? enqueue_entity+0xed/0x520
+[Thu Apr  9 18:49:18 2026]  __alloc_pages+0x31c/0x350
+[Thu Apr  9 18:49:18 2026]  ? p9_fcall_init+0x33/0x80
+[Thu Apr  9 18:49:18 2026]  __kmalloc_large_node+0x85/0x140
+[Thu Apr  9 18:49:18 2026]  __kmalloc+0xcd/0x140
+[Thu Apr  9 18:49:18 2026]  p9_fcall_init+0x33/0x80
+[Thu Apr  9 18:49:18 2026]  p9_tag_alloc+0x102/0x2a0
+[Thu Apr  9 18:49:18 2026]  p9_client_prepare_req+0x7f/0x170
+[Thu Apr  9 18:49:18 2026]  ? get_page_from_freelist+0x106d/0x1240
+[Thu Apr  9 18:49:18 2026]  p9_client_rpc+0x80/0x390
+[Thu Apr  9 18:49:18 2026]  p9_client_read_once+0x95/0x2f0
+[Thu Apr  9 18:49:18 2026]  p9_client_read+0x5c/0x80
+[Thu Apr  9 18:49:18 2026]  v9fs_issue_read+0x6b/0xb0
+[Thu Apr  9 18:49:18 2026]  netfs_begin_read+0x350/0x490
+[Thu Apr  9 18:49:18 2026]  ? xas_load+0x4a/0x60
+[Thu Apr  9 18:49:18 2026]  ? xa_load+0x72/0xb0
+[Thu Apr  9 18:49:18 2026]  netfs_readahead+0x103/0x190
+[Thu Apr  9 18:49:18 2026]  read_pages+0x59/0x220
+[Thu Apr  9 18:49:18 2026]  page_cache_ra_unbounded+0x140/0x190
+[Thu Apr  9 18:49:18 2026]  page_cache_ra_order+0x23b/0x2d0
+[Thu Apr  9 18:49:18 2026]  ? _raw_spin_unlock_irqrestore+0x2b/0x50
+[Thu Apr  9 18:49:18 2026]  ? __this_cpu_preempt_check+0x17/0x20
+[Thu Apr  9 18:49:18 2026]  filemap_fault+0x686/0xc80
+[Thu Apr  9 18:49:18 2026]  ? __pfx_pollwake+0x10/0x10
+[Thu Apr  9 18:49:18 2026]  __do_fault+0x36/0x170
+[Thu Apr  9 18:49:18 2026]  do_fault+0x2b5/0x570
+[Thu Apr  9 18:49:18 2026]  __handle_mm_fault+0x751/0x840
+[Thu Apr  9 18:49:18 2026]  handle_mm_fault+0xc7/0x2f0
+[Thu Apr  9 18:49:18 2026]  do_user_addr_fault+0x239/0x660
+[Thu Apr  9 18:49:18 2026]  exc_page_fault+0x73/0x160
+[Thu Apr  9 18:49:18 2026]  asm_exc_page_fault+0x2b/0x30
+[Thu Apr  9 18:49:18 2026] RIP: 0033:0x76fc4858fc10
+[Thu Apr  9 18:49:18 2026] Code: Unable to access opcode bytes at 0x76fc4858fbe6.
+[Thu Apr  9 18:49:18 2026] RSP: 002b:000076fc05dfddc8 EFLAGS: 00010206
+[Thu Apr  9 18:49:18 2026] RAX: 00006500ba1e4d08 RBX: 00006500b77f8550 RCX: 0000000000000000
+[Thu Apr  9 18:49:18 2026] RDX: 00006500b9e8e3b0 RSI: 0000000000000000 RDI: 000076fc05dfde50
+[Thu Apr  9 18:49:18 2026] RBP: 000076fc05dfde90 R08: 0000000000000000 R09: 0000000000000007
+[Thu Apr  9 18:49:18 2026] R10: 00006500bb013b10 R11: 96457ef7e78ddea7 R12: 000076fc05dfde50
+[Thu Apr  9 18:49:18 2026] R13: 0000000000000000 R14: 0000000000000004 R15: 0000000000000004
+[Thu Apr  9 18:49:18 2026]  </TASK>
+[Thu Apr  9 18:49:18 2026] Mem-Info:
+[Thu Apr  9 18:49:18 2026] active_anon:812285 inactive_anon:3003827 isolated_anon:0
+                            active_file:0 inactive_file:277 isolated_file:0
+                            unevictable:0 dirty:0 writeback:57804
+                            slab_reclaimable:16031 slab_unreclaimable:30069
+                            mapped:1964 shmem:19988 pagetables:26426
+                            sec_pagetables:0 bounce:0
+                            kernel_misc_reclaimable:0
+                            free:26917 free_pcp:126 free_cma:0
+[Thu Apr  9 18:49:18 2026] Node 0 active_anon:3249140kB inactive_anon:12015308kB active_file:0kB inactive_file:1108kB unevictable:0kB isolated(anon):0kB isolated(file):0kB mapped:7856kB dirty:0kB writeback:231216kB shmem:79952kB shmem_thp:0kB shmem_pmdmapped:0kB anon_thp:36864kB writeback_tmp:0kB kernel_stack:9952kB pagetables:105704kB sec_pagetables:0kB all_unreclaimable? yes
+[Thu Apr  9 18:49:18 2026] Node 0 DMA32 free:60752kB boost:0kB min:11260kB low:15252kB high:19244kB reserved_highatomic:2048KB active_anon:1783308kB inactive_anon:2099344kB active_file:0kB inactive_file:232kB unevictable:0kB writepending:33916kB present:4061820kB managed:3995648kB mlocked:0kB bounce:0kB free_pcp:392kB local_pcp:0kB free_cma:0kB
+[Thu Apr  9 18:49:18 2026] lowmem_reserve[]: 0 11700 11700 11700
+[Thu Apr  9 18:49:18 2026] Node 0 Normal free:46916kB boost:0kB min:33792kB low:45772kB high:57752kB reserved_highatomic:12288KB active_anon:1465832kB inactive_anon:9915964kB active_file:236kB inactive_file:648kB unevictable:0kB writepending:197364kB present:12322816kB managed:11989100kB mlocked:0kB bounce:0kB free_pcp:360kB local_pcp:0kB free_cma:0kB
+[Thu Apr  9 18:49:18 2026] lowmem_reserve[]: 0 0 0 0
+[Thu Apr  9 18:49:18 2026] Node 0 DMA32: 281*4kB (UM) 155*8kB (UM) 165*16kB (UMH) 167*32kB (UMEH) 120*64kB (UMH) 47*128kB (UMH) 4*256kB (U) 2*512kB (UH) 2*1024kB (MH) 10*2048kB (M) 3*4096kB (M) = 60908kB
+[Thu Apr  9 18:49:18 2026] Node 0 Normal: 406*4kB (UM) 422*8kB (UM) 320*16kB (UM) 305*32kB (UM) 218*64kB (UM) 20*128kB (UM) 1*256kB (U) 1*512kB (M) 1*1024kB (M) 4*2048kB (M) 0*4096kB = 46376kB
+[Thu Apr  9 18:49:18 2026] Node 0 hugepages_total=0 hugepages_free=0 hugepages_surp=0 hugepages_size=1048576kB
+[Thu Apr  9 18:49:18 2026] Node 0 hugepages_total=0 hugepages_free=0 hugepages_surp=0 hugepages_size=2048kB
+[Thu Apr  9 18:49:18 2026] 99806 total pagecache pages
+[Thu Apr  9 18:49:18 2026] 79449 pages in swap cache
+[Thu Apr  9 18:49:18 2026] Free swap  = 0kB
+[Thu Apr  9 18:49:18 2026] Total swap = 33554432kB
+[Thu Apr  9 18:49:18 2026] 4096159 pages RAM
+[Thu Apr  9 18:49:18 2026] 0 pages HighMem/MovableOnly
+[Thu Apr  9 18:49:18 2026] 99972 pages reserved
+[Thu Apr  9 18:49:18 2026] 0 pages hwpoisoned
+[Thu Apr  9 18:49:18 2026] python invoked oom-killer: gfp_mask=0x140dca(GFP_HIGHUSER_MOVABLE|__GFP_COMP|__GFP_ZERO), order=0, oom_score_adj=0
+[Thu Apr  9 18:49:18 2026] CPU: 19 PID: 32836 Comm: python Not tainted 6.6.87.2-microsoft-standard-WSL2 #1
+[Thu Apr  9 18:49:18 2026] Call Trace:
+[Thu Apr  9 18:49:18 2026]  <TASK>
+[Thu Apr  9 18:49:18 2026]  dump_stack_lvl+0x4c/0x70
+[Thu Apr  9 18:49:18 2026]  dump_stack+0x14/0x20
+[Thu Apr  9 18:49:18 2026]  dump_header+0x51/0x260
+[Thu Apr  9 18:49:18 2026]  oom_kill_process+0x100/0x1a0
+[Thu Apr  9 18:49:18 2026]  out_of_memory+0x11d/0x560
+[Thu Apr  9 18:49:18 2026]  __alloc_pages_slowpath.constprop.0+0x88d/0xe80
+[Thu Apr  9 18:49:18 2026]  __alloc_pages+0x31c/0x350
+[Thu Apr  9 18:49:18 2026]  __folio_alloc+0x1a/0x40
+[Thu Apr  9 18:49:18 2026]  vma_alloc_folio+0xad/0x390
+[Thu Apr  9 18:49:18 2026]  ? debug_smp_processor_id+0x1b/0x30
+[Thu Apr  9 18:49:18 2026]  do_anonymous_page+0x79/0x420
+[Thu Apr  9 18:49:18 2026]  __handle_mm_fault+0x818/0x840
+[Thu Apr  9 18:49:18 2026]  handle_mm_fault+0xc7/0x2f0
+[Thu Apr  9 18:49:18 2026]  do_user_addr_fault+0x188/0x660
+[Thu Apr  9 18:49:18 2026]  exc_page_fault+0x73/0x160
+[Thu Apr  9 18:49:18 2026]  asm_exc_page_fault+0x2b/0x30
+[Thu Apr  9 18:49:18 2026] RIP: 0033:0x71b3f88f92c3
+[Thu Apr  9 18:49:18 2026] Code: Unable to access opcode bytes at 0x71b3f88f9299.
+[Thu Apr  9 18:49:18 2026] RSP: 002b:000071b2a17f5c80 EFLAGS: 00010297
+[Thu Apr  9 18:49:18 2026] RAX: 000000000009cff0 RBX: 0000000000000000 RCX: 000071ad0ed8b040
+[Thu Apr  9 18:49:18 2026] RDX: 000071b2a17f5d50 RSI: 000071b1389fe040 RDI: 000064755a1407c0
+[Thu Apr  9 18:49:18 2026] RBP: 000071b2a17f5cb0 R08: 0000000000000001 R09: 0000000000000003
+[Thu Apr  9 18:49:18 2026] R10: 0000000000000001 R11: 0000000000000001 R12: 0000000000000001
+[Thu Apr  9 18:49:18 2026] R13: 0000000000240000 R14: 000000000023fff1 R15: 000064755a1407c0
+[Thu Apr  9 18:49:18 2026]  </TASK>
+[Thu Apr  9 18:49:18 2026] Mem-Info:
+[Thu Apr  9 18:49:18 2026] active_anon:812285 inactive_anon:3004490 isolated_anon:0
+                            active_file:280 inactive_file:195 isolated_file:0
+                            unevictable:0 dirty:0 writeback:49579
+                            slab_reclaimable:16031 slab_unreclaimable:29814
+                            mapped:1984 shmem:19988 pagetables:26426
+                            sec_pagetables:0 bounce:0
+                            kernel_misc_reclaimable:0
+                            free:25983 free_pcp:725 free_cma:0
+[Thu Apr  9 18:49:18 2026] Node 0 active_anon:3249140kB inactive_anon:12017960kB active_file:1120kB inactive_file:780kB unevictable:0kB isolated(anon):0kB isolated(file):0kB mapped:7936kB dirty:0kB writeback:198316kB shmem:79952kB shmem_thp:0kB shmem_pmdmapped:0kB anon_thp:36864kB writeback_tmp:0kB kernel_stack:9952kB pagetables:105704kB sec_pagetables:0kB all_unreclaimable? yes
+[Thu Apr  9 18:49:18 2026] Node 0 DMA32 free:57992kB boost:0kB min:11260kB low:15252kB high:19244kB reserved_highatomic:0KB active_anon:1783308kB inactive_anon:2101260kB active_file:0kB inactive_file:572kB unevictable:0kB writepending:27940kB present:4061820kB managed:3995648kB mlocked:0kB bounce:0kB free_pcp:1496kB local_pcp:0kB free_cma:0kB
+[Thu Apr  9 18:49:18 2026] lowmem_reserve[]: 0 11700 11700 11700
+[Thu Apr  9 18:49:18 2026] Node 0 Normal free:45940kB boost:0kB min:33792kB low:45772kB high:57752kB reserved_highatomic:12288KB active_anon:1465832kB inactive_anon:9916604kB active_file:544kB inactive_file:260kB unevictable:0kB writepending:170400kB present:12322816kB managed:11989100kB mlocked:0kB bounce:0kB free_pcp:1404kB local_pcp:0kB free_cma:0kB
+[Thu Apr  9 18:49:18 2026] lowmem_reserve[]: 0 0 0 0
+[Thu Apr  9 18:49:18 2026] Node 0 DMA32: 208*4kB (UM) 158*8kB (UM) 150*16kB (U) 132*32kB (U) 92*64kB (UM) 47*128kB (UM) 4*256kB (U) 2*512kB (UM) 2*1024kB (M) 10*2048kB (M) 3*4096kB (M) = 57488kB
+[Thu Apr  9 18:49:18 2026] Node 0 Normal: 205*4kB (U) 397*8kB (UM) 324*16kB (UM) 305*32kB (UM) 218*64kB (UM) 20*128kB (UM) 1*256kB (U) 1*512kB (M) 1*1024kB (M) 4*2048kB (M) 0*4096kB = 45436kB
+[Thu Apr  9 18:49:18 2026] Node 0 hugepages_total=0 hugepages_free=0 hugepages_surp=0 hugepages_size=1048576kB
+[Thu Apr  9 18:49:18 2026] Node 0 hugepages_total=0 hugepages_free=0 hugepages_surp=0 hugepages_size=2048kB
+[Thu Apr  9 18:49:18 2026] 99857 total pagecache pages
+[Thu Apr  9 18:49:18 2026] 79449 pages in swap cache
+[Thu Apr  9 18:49:18 2026] Free swap  = 0kB
+[Thu Apr  9 18:49:18 2026] Total swap = 33554432kB
+[Thu Apr  9 18:49:18 2026] 4096159 pages RAM
+[Thu Apr  9 18:49:18 2026] 0 pages HighMem/MovableOnly
+[Thu Apr  9 18:49:18 2026] 99972 pages reserved
+[Thu Apr  9 18:49:18 2026] 0 pages hwpoisoned
+[Thu Apr  9 18:49:18 2026] Tasks state (memory values in pages):
+[Thu Apr  9 18:49:18 2026] [  pid  ]   uid  tgid total_vm      rss pgtables_bytes swapents oom_score_adj name
+[Thu Apr  9 18:49:18 2026] [    348]     0   348      778      128    45056        0             0 DebugShell
+[Thu Apr  9 18:49:18 2026] [    351]     0   351     1396      192    45056        0             0 agetty
+[Thu Apr  9 18:49:18 2026] [    357]   999   357     1073      448    53248        0             0 chronyd
+[Thu Apr  9 18:49:18 2026] [    365]     0   365      815      640    45056        0             0 GnsEngine
+[Thu Apr  9 18:49:18 2026] [    371]     0   371      782      448    45056        0             0 init
+[Thu Apr  9 18:49:18 2026] [    373]     0   373      745      384    49152        0             0 init
+[Thu Apr  9 18:49:18 2026] [    374]     0   374      780      512    45056        0             0 init()
+[Thu Apr  9 18:49:18 2026] [    379]     0   379     5391     1792    86016        0             0 systemd
+[Thu Apr  9 18:49:18 2026] [    380]     0   380      780      448    49152        0             0 init-systemd(Ub
+[Thu Apr  9 18:49:18 2026] [    399]     0   399    29536      640    86016       64             0 WSLGd
+[Thu Apr  9 18:49:18 2026] [    403]  1000   403   243296     2247   397312     2688             0 weston
+[Thu Apr  9 18:49:18 2026] [    411]  1000   411      747      512    45056        0             0 init
+[Thu Apr  9 18:49:18 2026] [    412]  1000   412     2404      640    61440        0             0 dbus-daemon
+[Thu Apr  9 18:49:18 2026] [    413]  1000   413    58836      832    90112        0             0 pulseaudio
+[Thu Apr  9 18:49:18 2026] [    414]     0   414      780      448    45056        0             0 init
+[Thu Apr  9 18:49:18 2026] [    419]  1000   419     2371      320    61440        0             0 dbus-daemon
+[Thu Apr  9 18:49:18 2026] [    426]  1000   426    56301     1024   356352     2240             0 Xwayland
+[Thu Apr  9 18:49:18 2026] [    460]     0   460    14624      952   110592        0          -250 systemd-journal
+[Thu Apr  9 18:49:18 2026] [    516]     0   516     6255     1280    73728        0         -1000 systemd-udevd
+[Thu Apr  9 18:49:18 2026] [    638]   991   638     5363     1408    86016      128             0 systemd-resolve
+[Thu Apr  9 18:49:18 2026] [    639]   996   639    22737      960    81920        0             0 systemd-timesyn
+[Thu Apr  9 18:49:18 2026] [    647]     0   647     1059      704    45056        0             0 cron
+[Thu Apr  9 18:49:18 2026] [    648]   101   648     2408      832    61440        0          -900 dbus-daemon
+[Thu Apr  9 18:49:18 2026] [    656]     0   656     4491      960    77824        0             0 systemd-logind
+[Thu Apr  9 18:49:18 2026] [    662]     0   662      790      320    53248        0             0 agetty
+[Thu Apr  9 18:49:18 2026] [    673]     0   673      779      256    49152        0             0 agetty
+[Thu Apr  9 18:49:18 2026] [    675]   102   675    55627      832    81920        0             0 rsyslogd
+[Thu Apr  9 18:49:18 2026] [    713]     0   713    26752     1664   110592     1472             0 unattended-upgr
+[Thu Apr  9 18:49:18 2026] [    822]     0   822      784      192    49152        0             0 SessionLeader
+[Thu Apr  9 18:49:18 2026] [    823]     0   823      784      256    49152        0             0 Relay(324)
+[Thu Apr  9 18:49:18 2026] [    824]  1000   824     1608     1472    65536        0             0 bash
+[Thu Apr  9 18:49:18 2026] [    825]     0   825     1666      704    65536        0             0 login
+[Thu Apr  9 18:49:18 2026] [    873]  1000   873     5044     1006    77824       64           100 systemd
+[Thu Apr  9 18:49:18 2026] [    874]  1000   874     5289      623    77824      192           100 (sd-pam)
+[Thu Apr  9 18:49:18 2026] [    890]  1000   890     1539      768    53248      128             0 bash
+[Thu Apr  9 18:49:18 2026] [   1346]     0  1346      784      192    49152        0             0 SessionLeader
+[Thu Apr  9 18:49:18 2026] [   1348]     0  1348      784      192    49152        0             0 Relay(844)
+[Thu Apr  9 18:49:18 2026] [   1350]  1000  1350     1574     1024    61440        0             0 bash
+[Thu Apr  9 18:49:18 2026] [   1423]     0  1423      784      192    49152        0             0 SessionLeader
+[Thu Apr  9 18:49:18 2026] [   1424]     0  1424      784      256    49152        0             0 Relay(921)
+[Thu Apr  9 18:49:18 2026] [   1428]  1000  1428     1574      960    57344       64             0 bash
+[Thu Apr  9 18:49:18 2026] [   1451]  1000  1451      958      704    49152        0             0 watch
+[Thu Apr  9 18:49:18 2026] [   1770]  1000  1770      674      256    45056        0             0 time
+[Thu Apr  9 18:49:18 2026] [   1771]  1000  1771      784      320    45056        0             0 tee
+[Thu Apr  9 18:49:18 2026] [   1772]  1000  1772 18038002   875997 66437120  6683264             0 python
+[Thu Apr  9 18:49:18 2026] [  32744]  1000 32744 16079968  2842939 38985728  1688000             0 python
+[Thu Apr  9 18:49:18 2026] oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0,global_oom,task_memcg=/init.scope,task=python,pid=1772,uid=1000
+[Thu Apr  9 18:49:18 2026] Out of memory: Killed process 1772 (python) total-vm:72152008kB, anon-rss:3491984kB, file-rss:3044kB, shmem-rss:8960kB, UID:1000 pgtables:64880kB oom_score_adj:0
